@@ -1,26 +1,15 @@
-# AC Metais Data Platform
+# Industrial Data Platform
 
-## Roadmap
-
-- [ ] **Phase 0 — Foundations:** local environment, Git, Docker, Terraform basics
-- [ ] **Phase 1 — Plant simulator:** Python generating orders, production orders and stage events
-- [ ] **Phase 2 — Batch lakehouse:** Data Lake + Databricks with bronze, silver and gold layers
-- [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
-- [ ] **MVP:** first Power BI dashboard
-- [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
-- [ ] **Phase 5 — Automation:** orchestration, CI/CD and full infrastructure as code
-- [ ] **Phase 6 — Finance & logistics:** margin per order and on-time delivery
-- [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
-End-to-end data engineering platform on **Azure** for a laser cutting and metal fabrication plant: from simulated shop-floor events to production planning (PCP) insights.
+End-to-end data engineering platform on **Azure** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
 > 🚧 **Work in progress** — see the [Roadmap](#roadmap) for current status.
 
 ## The problem
 
-AC Metais is a Brazilian company that develops products with laser cutting, locksmithing and boilermaking. Every order follows the same path:
+Every order at AC Metais follows the same path:
 
 ```
-Order → Laser cutting → Locksmithing / Boilermaking → Finishing → Shipping
+Order → Laser cutting → Metalworking / Boilermaking → Finishing → Shipping
 ```
 
 Questions the business asks every day, and that are hard to answer without a data platform:
@@ -38,11 +27,15 @@ A cloud data platform that collects shop-floor and business events, organizes th
 ```mermaid
 flowchart LR
     A[Plant simulator<br/>Python] -->|machine telemetry| B[Azure Event Hubs]
-    A -->|orders, production, shipping| C[Azure Data Lake]
-    B --> D
-    C --> D[Azure Databricks<br/>bronze → silver → gold]
-    D -->|dbt models + tests| E[Gold layer]
-    E --> F[Power BI]
+    A -->|orders, production, shipping| C[Azure Data Lake<br/>bronze]
+    B --> D[Azure Databricks]
+    D --> C
+    C --> E[Databricks PySpark<br/>silver]
+    E -->|dbt models + tests| F[Gold layer<br/>Databricks SQL Warehouse]
+    F --> G[Power BI]
+    H[Apache Airflow] -.orchestrates.-> D
+    H -.orchestrates.-> E
+    H -.orchestrates.-> F
 ```
 
 ### Modules
@@ -56,13 +49,46 @@ flowchart LR
 
 ## Tech stack
 
-**Cloud:** Azure (Data Lake Storage, Event Hubs, Databricks, Key Vault, Monitor)
-**Processing:** Python, PySpark, SQL, Delta Lake
-**Transformation:** dbt
-**Orchestration:** Azure Data Factory / Databricks Workflows
-**Infrastructure & DevOps:** Terraform, Docker, GitHub Actions
-**Visualization:** Power BI
+**Architecture:** Lakehouse on Azure — no separate data warehouse. Data is stored once in the data lake and the gold layer is served with SQL.
 
+| Layer | Tool |
+|---|---|
+| Cloud | Microsoft Azure |
+| Storage (data lake) | Azure Data Lake Storage Gen2 + Delta Lake |
+| Streaming ingestion | Azure Event Hubs |
+| Processing | Azure Databricks (PySpark, SQL) |
+| Serving (warehouse layer) | Databricks SQL Warehouse |
+| Transformation & tests | dbt |
+| Orchestration | Apache Airflow (Docker) |
+| Simulator runtime | Python on Azure Container Apps |
+| Security & monitoring | Azure Key Vault, Azure Monitor, Cost Management |
+| Infrastructure & DevOps | Terraform, Docker, GitHub Actions |
+| Visualization | Power BI |
+
+## Repository structure
+
+```
+simulator/       Plant simulator (Python)
+ingestion/       Data Lake and Event Hubs ingestion
+databricks/      Bronze → silver processing (PySpark)
+dbt/             Silver → gold models and tests (SQL)
+orchestration/   Airflow DAGs
+infra/           Terraform
+docs/            Architecture and technical decisions
+tests/           Automated tests
+```
+
+## Roadmap
+
+- [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
+- [ ] **Phase 1 — Plant simulator:** Python generating orders, production orders and stage events
+- [ ] **Phase 2 — Batch lakehouse:** Data Lake + Databricks with bronze, silver and gold layers
+- [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
+- [ ] **MVP:** first Power BI dashboard
+- [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
+- [ ] **Phase 5 — Automation:** Airflow orchestration, CI/CD and infrastructure as code
+- [ ] **Phase 6 — Finance & logistics:** margin per order and on-time delivery
+- [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
 
 ## About the data
 
