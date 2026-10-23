@@ -22,18 +22,19 @@ Questions the business asks every day, and that are hard to answer without a dat
 
 ## The solution
 
-A cloud data platform that collects shop-floor and business events, organizes them in a lakehouse and turns them into decisions for production planning, finance and logistics.
+A cloud data platform that extracts data from the plant's ERP and machines, organizes it in a lakehouse and turns it into decisions for production planning, finance and logistics.
 
 ```mermaid
 flowchart LR
-    A[Plant simulator<br/>Python] -->|machine telemetry| B[Azure Event Hubs]
-    A -->|orders, production, shipping| C[Azure Data Lake<br/>bronze]
+    A[Plant simulator<br/>Python] -->|orders, production, shipping| P[(PostgreSQL<br/>ERP database)]
+    A -->|machine telemetry| B[Azure Event Hubs]
+    P -->|incremental extraction| C[Azure Data Lake<br/>bronze]
     B --> D[Azure Databricks]
     D --> C
     C --> E[Databricks PySpark<br/>silver]
     E -->|dbt models + tests| F[Gold layer<br/>Databricks SQL Warehouse]
     F --> G[Power BI]
-    H[Apache Airflow] -.orchestrates.-> D
+    H[Apache Airflow] -.orchestrates.-> P
     H -.orchestrates.-> E
     H -.orchestrates.-> F
 ```
@@ -49,11 +50,12 @@ flowchart LR
 
 ## Tech stack
 
-**Architecture:** Lakehouse on Azure — no separate data warehouse. Data is stored once in the data lake and the gold layer is served with SQL.
+**Architecture:** the plant's ERP runs on a relational (OLTP) database. Data is extracted incrementally into a lakehouse on Azure — no separate data warehouse. Data is stored once in the data lake and the gold layer is served with SQL.
 
 | Layer | Tool |
 |---|---|
 | Cloud | Microsoft Azure |
+| Source system (ERP) | PostgreSQL (Docker) |
 | Storage (data lake) | Azure Data Lake Storage Gen2 + Delta Lake |
 | Streaming ingestion | Azure Event Hubs |
 | Processing | Azure Databricks (PySpark, SQL) |
@@ -68,8 +70,9 @@ flowchart LR
 ## Repository structure
 
 ```
+erp/             ERP database schema (SQL) and local setup
 simulator/       Plant simulator (Python)
-ingestion/       Data Lake and Event Hubs ingestion
+ingestion/       Extraction from the ERP and Event Hubs ingestion
 databricks/      Bronze → silver processing (PySpark)
 dbt/             Silver → gold models and tests (SQL)
 orchestration/   Airflow DAGs
@@ -81,8 +84,8 @@ tests/           Automated tests
 ## Roadmap
 
 - [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
-- [ ] **Phase 1 — Plant simulator:** Python generating orders, production orders and stage events
-- [ ] **Phase 2 — Batch lakehouse:** Data Lake + Databricks with bronze, silver and gold layers
+- [ ] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
+- [ ] **Phase 2 — Batch lakehouse:** incremental extraction from the ERP into the Data Lake + Databricks with bronze and silver layers
 - [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
 - [ ] **MVP:** first Power BI dashboard
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
