@@ -1,0 +1,15 @@
+services:
+  erp-db:
+    image: postgres:17
+    container_name: erp-db
+    environment:
+      POSTGRES_USER: ${ERP_DB_USER}
+      POSTGRES_PASSWORD: ${ERP_DB_PASSWORD}
+      POSTGRES_DB: ${ERP_DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - erp-data:/var/lib/postgresql/data
+
+volumes:
+  erp-data:
