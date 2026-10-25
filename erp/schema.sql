@@ -125,6 +125,3 @@ CREATE TABLE IF NOT EXISTS production_operations (
     UNIQUE (production_order_id, step_sequence),
     CHECK (finished_at >= started_at)
 );
-ALTER TABLE production_operations
-    ADD COLUMN quantity_good  INTEGER CHECK (quantity_good >= 0),
-    ADD COLUMN quantity_scrap INTEGER CHECK (quantity_scrap >= 0);
