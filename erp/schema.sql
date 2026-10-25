@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS operators (
     operator_name   VARCHAR(100) NOT NULL,
     work_center_id  INTEGER      NOT NULL REFERENCES work_centers (work_center_id),
     operator_role   VARCHAR(30)  NOT NULL
-                    CHECK (role IN ('machine_operator', 'unloader', 'welder', 'assembler', 'finisher', 'inspector')),
+                    CHECK (operator_role IN ('machine_operator', 'unloader', 'welder', 'assembler', 'finisher', 'inspector')),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -66,4 +66,31 @@ CREATE TABLE IF NOT EXISTS products (
     product_unit_weight_kg  NUMERIC(8,3) NOT NULL CHECK (product_unit_weight_kg > 0),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+-- =====================================================
+-- Transactional data (movimento)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS sales_orders (
+    sales_order_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_number    VARCHAR(20) NOT NULL UNIQUE,
+    customer_id     INTEGER     NOT NULL REFERENCES customers (customer_id),
+    ordered_at      TIMESTAMPTZ NOT NULL,
+    due_date        DATE        NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'open'
+                    CHECK (status IN ('open', 'in_production', 'shipped', 'cancelled')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sales_order_items (
+    sales_order_item_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sales_order_id       INTEGER       NOT NULL REFERENCES sales_orders (sales_order_id),
+    line_number          SMALLINT      NOT NULL CHECK (line_number > 0),
+    product_id           INTEGER       NOT NULL REFERENCES products (product_id),
+    quantity             INTEGER       NOT NULL CHECK (quantity > 0),
+    unit_price_brl       NUMERIC(12,2) NOT NULL CHECK (unit_price_brl >= 0),
+    created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    UNIQUE (sales_order_id, line_number)
 );
