@@ -159,3 +159,31 @@ CREATE TABLE IF NOT EXISTS shipments (
 
 CREATE INDEX IF NOT EXISTS ix_shipments_sales_order
     ON shipments (sales_order_id);
+
+    
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+    t TEXT;
+BEGIN
+    FOR t IN
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'updated_at'
+    LOOP
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER trg_%1$s_updated_at
+                 BEFORE UPDATE ON %1$I
+                 FOR EACH ROW EXECUTE FUNCTION set_updated_at()',
+            t);
+    END LOOP;
+END;
+$$;
