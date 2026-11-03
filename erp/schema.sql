@@ -67,20 +67,20 @@ CREATE TABLE IF NOT EXISTS products (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
--- =====================================================
--- Transactional data (movimento)
--- =====================================================
+
+-- Transactional tables: orders and shop-floor execution
 
 CREATE TABLE IF NOT EXISTS sales_orders (
-    sales_order_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    order_number    VARCHAR(20) NOT NULL UNIQUE,
-    customer_id     INTEGER     NOT NULL REFERENCES customers (customer_id),
-    ordered_at      TIMESTAMPTZ NOT NULL,
-    due_date        DATE        NOT NULL,
-    status          VARCHAR(20) NOT NULL DEFAULT 'open'
-                    CHECK (status IN ('open', 'in_production', 'shipped', 'cancelled')),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    sales_order_id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sales_order_number  VARCHAR(20)  NOT NULL UNIQUE,
+    customer_id         INTEGER      NOT NULL REFERENCES customers (customer_id),
+    order_date          DATE         NOT NULL,
+    promised_date       DATE         NOT NULL,
+    sales_order_status  VARCHAR(20)  NOT NULL DEFAULT 'open'
+                        CHECK (sales_order_status IN ('open', 'in_production', 'shipped', 'cancelled')),
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (promised_date >= order_date)
 );
 
 CREATE TABLE IF NOT EXISTS sales_order_items (
@@ -97,31 +97,33 @@ CREATE TABLE IF NOT EXISTS sales_order_items (
 
 CREATE TABLE IF NOT EXISTS production_orders (
     production_order_id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    production_order_number  VARCHAR(20) NOT NULL UNIQUE,
-    sales_order_item_id      INTEGER     NOT NULL REFERENCES sales_order_items (sales_order_item_id),
-    quantity                 INTEGER     NOT NULL CHECK (quantity > 0),
-    planned_start_date       DATE        NOT NULL,
-    status                   VARCHAR(20) NOT NULL DEFAULT 'planned'
-                             CHECK (status IN ('planned', 'in_progress', 'completed', 'cancelled')),
-    created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+    production_order_number  VARCHAR(20)  NOT NULL UNIQUE,
+    sales_order_item_id      INTEGER      NOT NULL REFERENCES sales_order_items (sales_order_item_id),
+    planned_quantity         INTEGER      NOT NULL CHECK (planned_quantity > 0),
+    planned_start_date       DATE         NOT NULL,
+    due_date                 DATE         NOT NULL,
+    production_order_status  VARCHAR(20)  NOT NULL DEFAULT 'planned'
+                             CHECK (production_order_status IN ('planned', 'released', 'in_progress', 'completed', 'cancelled')),
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (due_date >= planned_start_date)
 );
 
-CREATE TABLE IF NOT EXISTS production_operations (
-    production_operation_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    production_order_id      INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
-    step_sequence            SMALLINT    NOT NULL CHECK (step_sequence > 0),
-    work_center_id           INTEGER     NOT NULL REFERENCES work_centers (work_center_id),
-    machine_id               INTEGER     REFERENCES machines (machine_id),
-    operator_id              INTEGER     REFERENCES operators (operator_id),
-    started_at               TIMESTAMPTZ,
-    finished_at              TIMESTAMPTZ,
-    quantity_good            INTEGER     CHECK (quantity_good >= 0),
-    quantity_scrap           INTEGER     CHECK (quantity_scrap >= 0),
-    status                   VARCHAR(20) NOT NULL DEFAULT 'waiting'
-                             CHECK (status IN ('waiting', 'in_progress', 'completed')),
-    created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (production_order_id, step_sequence),
-    CHECK (finished_at >= started_at)
+-- Append-only log: one row per start/finish of a routing step.
+-- Lead time and bottleneck analysis are built from these events.
+CREATE TABLE IF NOT EXISTS production_stage_events (
+    event_id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    production_order_id  INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
+    routing_step_id      INTEGER     NOT NULL REFERENCES routing_steps (routing_step_id),
+    event_type           VARCHAR(10) NOT NULL CHECK (event_type IN ('start', 'finish')),
+    event_ts             TIMESTAMPTZ NOT NULL,
+    machine_id           INTEGER     REFERENCES machines (machine_id),
+    operator_id          INTEGER     REFERENCES operators (operator_id),
+    good_quantity        INTEGER     CHECK (good_quantity >= 0),
+    scrap_quantity       INTEGER     CHECK (scrap_quantity >= 0),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (production_order_id, routing_step_id, event_type)
 );
+
+CREATE INDEX IF NOT EXISTS ix_production_stage_events_order
+    ON production_stage_events (production_order_id);
