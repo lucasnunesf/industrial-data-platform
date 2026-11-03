@@ -1,68 +1,51 @@
-"""
-Factory configuration for the AC Metais plant simulator.
+"""Simulation parameters. Fixed factory layout lives in erp/seed.sql."""
 
-Defines the production stages, machines and materials that the simulator
-uses to generate orders and shop-floor events.
-All values are realistic assumptions, not real company data.
-"""
+from datetime import date
 
-from dataclasses import dataclass
+SEED = 42
+START_DATE = date(2026, 7, 1)
+TIMEZONE = "America/Sao_Paulo"
 
+SHIFT_START_HOUR = 7
+SHIFT_END_HOUR = 16
+WORKDAYS = {0, 1, 2, 3, 4}
 
-@dataclass(frozen=True)
-class Stage:
-    code: str
-    name: str
-    sequence: int     # order in which a production order goes through the stages
-    avg_hours: float  # average processing time per production order
+N_CUSTOMERS = 40
+N_PRODUCTS = 30
 
-
-@dataclass(frozen=True)
-class Machine:
-    code: str
-    name: str
-    stage_code: str   # stage where the machine works
-
-
-@dataclass(frozen=True)
-class Material:
-    code: str
-    name: str
-    density_g_cm3: float  # used later to calculate sheet weight and scrap
-
-
-STAGES = [
-    Stage("CUT", "Laser cutting", 1, 2.0),
-    Stage("FAB", "Metalworking / boilermaking", 2, 6.0),
-    Stage("FIN", "Finishing", 3, 3.0),
-    Stage("SHP", "Shipping", 4, 1.0),
-]
-
-MACHINES = [
-    Machine("LSR-01", "Fiber laser 01", "CUT"),
-    Machine("LSR-02", "Fiber laser 02", "CUT"),
-    Machine("BND-01", "Press brake 01", "FAB"),
-    Machine("WLD-01", "Welding cell 01", "FAB"),
-    Machine("PNT-01", "Paint booth 01", "FIN"),
-]
+ORDERS_PER_DAY = (2, 6)
+ITEMS_PER_ORDER = (1, 4)
+QUANTITY_PER_ITEM = (5, 40)
+PROMISED_DAYS = (7, 30)
 
 MATERIALS = [
-    Material("CS-1020", "Carbon steel SAE 1020", 7.85),
-    Material("SS-304", "Stainless steel AISI 304", 8.00),
-    Material("AL-5052", "Aluminum 5052", 2.68),
+    ("CS-1020-2", "Carbon steel SAE 1020 2mm", 2.00, 7.85, 9.0),
+    ("CS-1020-3", "Carbon steel SAE 1020 3mm", 3.00, 7.85, 9.0),
+    ("CS-1020-6", "Carbon steel SAE 1020 6mm", 6.00, 7.85, 9.0),
+    ("SS-304-1", "Stainless steel AISI 304 1.5mm", 1.50, 8.00, 32.0),
+    ("SS-304-3", "Stainless steel AISI 304 3mm", 3.00, 8.00, 32.0),
+    ("AL-5052-2", "Aluminum 5052 2mm", 2.00, 2.68, 38.0),
+    ("AL-5052-4", "Aluminum 5052 4mm", 4.00, 2.68, 38.0),
 ]
 
+PART_TYPES = ["Bracket", "Base plate", "Frame", "Guard", "Support",
+              "Panel", "Flange", "Cover", "Enclosure", "Rack"]
 
-def print_summary() -> None:
-    """Print the plant configuration in production order."""
-    print("AC Metais plant configuration\n")
-    for stage in sorted(STAGES, key=lambda s: s.sequence):
-        machines = [m.code for m in MACHINES if m.stage_code == stage.code]
-        machine_list = ", ".join(machines) if machines else "no machines"
-        print(f"{stage.sequence}. {stage.name} (~{stage.avg_hours}h) -> {machine_list}")
+ROUTING_WEIGHTS = {"CUT_ONLY": 0.40, "CUT_FAB": 0.35, "FULL": 0.25}
 
-    print(f"\nMaterials: {', '.join(m.name for m in MATERIALS)}")
+OPERATORS = [
+    ("CUT", "machine_operator", 2),
+    ("CUT", "unloader", 2),
+    ("FAB", "welder", 5),
+    ("FAB", "assembler", 5),
+    ("FIN", "finisher", 5),
+    ("QC", "inspector", 1),
+]
 
+# Minutes per unit at each work center (scaled by part weight) and setup minutes.
+MINUTES_PER_UNIT = {"CUT": 2.2, "WELD": 3.5, "FAB": 12.0, "FIN": 6.0}
+SETUP_MINUTES = {"CUT": 20, "WELD": 15, "FAB": 10, "FIN": 5}
+PARALLEL_SLOTS = {"CUT": 2, "WELD": 1, "FAB": 10, "FIN": 5}
+SCRAP_RATE = {"CUT": 0.03, "WELD": 0.01, "FAB": 0.015, "FIN": 0.005}
 
-if __name__ == "__main__":
-    print_summary()
+INSPECTION_RATE = 0.20
