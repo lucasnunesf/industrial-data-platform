@@ -109,8 +109,6 @@ CREATE TABLE IF NOT EXISTS production_orders (
     CHECK (due_date >= planned_start_date)
 );
 
--- Append-only log: one row per start/finish of a routing step.
--- Lead time and bottleneck analysis are built from these events.
 CREATE TABLE IF NOT EXISTS production_stage_events (
     event_id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     production_order_id  INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
@@ -127,3 +125,37 @@ CREATE TABLE IF NOT EXISTS production_stage_events (
 
 CREATE INDEX IF NOT EXISTS ix_production_stage_events_order
     ON production_stage_events (production_order_id);
+
+
+CREATE TABLE IF NOT EXISTS quality_inspections (
+    inspection_id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    production_order_id  INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
+    inspector_id         INTEGER     NOT NULL REFERENCES operators (operator_id),
+    inspected_at         TIMESTAMPTZ NOT NULL,
+    quantity_inspected   INTEGER     NOT NULL CHECK (quantity_inspected > 0),
+    quantity_rejected    INTEGER     NOT NULL DEFAULT 0 CHECK (quantity_rejected >= 0),
+    inspection_result    VARCHAR(10) NOT NULL
+                         CHECK (inspection_result IN ('approved', 'rejected', 'rework')),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (quantity_rejected <= quantity_inspected)
+);
+
+CREATE INDEX IF NOT EXISTS ix_quality_inspections_order
+    ON quality_inspections (production_order_id);
+
+-- Shipment of a sales order. Mutable: status changes until delivery.
+CREATE TABLE IF NOT EXISTS shipments (
+    shipment_id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    shipment_number      VARCHAR(20) NOT NULL UNIQUE,
+    sales_order_id       INTEGER     NOT NULL REFERENCES sales_orders (sales_order_id),
+    shipped_at           TIMESTAMPTZ NOT NULL,
+    delivered_at         TIMESTAMPTZ,
+    shipment_status      VARCHAR(20) NOT NULL DEFAULT 'shipped'
+                         CHECK (shipment_status IN ('shipped', 'delivered', 'returned')),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (delivered_at >= shipped_at)
+);
+
+CREATE INDEX IF NOT EXISTS ix_shipments_sales_order
+    ON shipments (sales_order_id);
