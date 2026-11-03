@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS operators (
     operator_name   VARCHAR(100) NOT NULL,
     work_center_id  INTEGER      NOT NULL REFERENCES work_centers (work_center_id),
     operator_role   VARCHAR(30)  NOT NULL
-                    CHECK (role IN ('machine_operator', 'unloader', 'welder', 'assembler', 'finisher', 'inspector')),
+                    CHECK (operator_role IN ('machine_operator', 'unloader', 'welder', 'assembler', 'finisher', 'inspector')),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -67,3 +67,123 @@ CREATE TABLE IF NOT EXISTS products (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+-- Transactional tables: orders and shop-floor execution
+
+CREATE TABLE IF NOT EXISTS sales_orders (
+    sales_order_id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sales_order_number  VARCHAR(20)  NOT NULL UNIQUE,
+    customer_id         INTEGER      NOT NULL REFERENCES customers (customer_id),
+    order_date          DATE         NOT NULL,
+    promised_date       DATE         NOT NULL,
+    sales_order_status  VARCHAR(20)  NOT NULL DEFAULT 'open'
+                        CHECK (sales_order_status IN ('open', 'in_production', 'shipped', 'cancelled')),
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (promised_date >= order_date)
+);
+
+CREATE TABLE IF NOT EXISTS sales_order_items (
+    sales_order_item_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sales_order_id       INTEGER       NOT NULL REFERENCES sales_orders (sales_order_id),
+    line_number          SMALLINT      NOT NULL CHECK (line_number > 0),
+    product_id           INTEGER       NOT NULL REFERENCES products (product_id),
+    quantity             INTEGER       NOT NULL CHECK (quantity > 0),
+    unit_price_brl       NUMERIC(12,2) NOT NULL CHECK (unit_price_brl >= 0),
+    created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    UNIQUE (sales_order_id, line_number)
+);
+
+CREATE TABLE IF NOT EXISTS production_orders (
+    production_order_id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    production_order_number  VARCHAR(20)  NOT NULL UNIQUE,
+    sales_order_item_id      INTEGER      NOT NULL REFERENCES sales_order_items (sales_order_item_id),
+    planned_quantity         INTEGER      NOT NULL CHECK (planned_quantity > 0),
+    planned_start_date       DATE         NOT NULL,
+    due_date                 DATE         NOT NULL,
+    production_order_status  VARCHAR(20)  NOT NULL DEFAULT 'planned'
+                             CHECK (production_order_status IN ('planned', 'released', 'in_progress', 'completed', 'cancelled')),
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CHECK (due_date >= planned_start_date)
+);
+
+CREATE TABLE IF NOT EXISTS production_stage_events (
+    event_id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    production_order_id  INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
+    routing_step_id      INTEGER     NOT NULL REFERENCES routing_steps (routing_step_id),
+    event_type           VARCHAR(10) NOT NULL CHECK (event_type IN ('start', 'finish')),
+    event_ts             TIMESTAMPTZ NOT NULL,
+    machine_id           INTEGER     REFERENCES machines (machine_id),
+    operator_id          INTEGER     REFERENCES operators (operator_id),
+    good_quantity        INTEGER     CHECK (good_quantity >= 0),
+    scrap_quantity       INTEGER     CHECK (scrap_quantity >= 0),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (production_order_id, routing_step_id, event_type)
+);
+
+CREATE INDEX IF NOT EXISTS ix_production_stage_events_order
+    ON production_stage_events (production_order_id);
+
+
+CREATE TABLE IF NOT EXISTS quality_inspections (
+    inspection_id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    production_order_id  INTEGER     NOT NULL REFERENCES production_orders (production_order_id),
+    inspector_id         INTEGER     NOT NULL REFERENCES operators (operator_id),
+    inspected_at         TIMESTAMPTZ NOT NULL,
+    quantity_inspected   INTEGER     NOT NULL CHECK (quantity_inspected > 0),
+    quantity_rejected    INTEGER     NOT NULL DEFAULT 0 CHECK (quantity_rejected >= 0),
+    inspection_result    VARCHAR(10) NOT NULL
+                         CHECK (inspection_result IN ('approved', 'rejected', 'rework')),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (quantity_rejected <= quantity_inspected)
+);
+
+CREATE INDEX IF NOT EXISTS ix_quality_inspections_order
+    ON quality_inspections (production_order_id);
+
+-- Shipment of a sales order. Mutable: status changes until delivery.
+CREATE TABLE IF NOT EXISTS shipments (
+    shipment_id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    shipment_number      VARCHAR(20) NOT NULL UNIQUE,
+    sales_order_id       INTEGER     NOT NULL REFERENCES sales_orders (sales_order_id),
+    shipped_at           TIMESTAMPTZ NOT NULL,
+    delivered_at         TIMESTAMPTZ,
+    shipment_status      VARCHAR(20) NOT NULL DEFAULT 'shipped'
+                         CHECK (shipment_status IN ('shipped', 'delivered', 'returned')),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (delivered_at >= shipped_at)
+);
+
+CREATE INDEX IF NOT EXISTS ix_shipments_sales_order
+    ON shipments (sales_order_id);
+
+    
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+    t TEXT;
+BEGIN
+    FOR t IN
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'updated_at'
+    LOOP
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER trg_%1$s_updated_at
+                 BEFORE UPDATE ON %1$I
+                 FOR EACH ROW EXECUTE FUNCTION set_updated_at()',
+            t);
+    END LOOP;
+END;
+$$;
