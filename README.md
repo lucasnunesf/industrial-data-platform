@@ -81,10 +81,24 @@ docs/            Architecture and technical decisions
 tests/           Automated tests
 ```
 
+## Quick start
+
+Requirements: Docker Desktop.
+
+```bash
+cp .env.example .env                        # then set your own password
+docker compose up -d                        # PostgreSQL ERP, schema and seed load on first start
+docker compose run --rm --build simulator   # simulate the plant from 2026-07-01 until now
+```
+
+The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
+
+The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are documented in [docs/assumptions.md](docs/assumptions.md).
+
 ## Roadmap
 
 - [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
-- [ ] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
+- [x] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
 - [ ] **Phase 2 — Batch lakehouse:** incremental extraction from the ERP into the Data Lake + Databricks with bronze and silver layers
 - [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
 - [ ] **MVP:** first Power BI dashboard

@@ -1,0 +1,4 @@
+faker
+psycopg[binary]
+python-dotenv
+tzdata
