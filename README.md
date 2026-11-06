@@ -29,10 +29,10 @@ flowchart LR
     A[Plant simulator<br/>Python] -->|orders, production, shipping| P[(PostgreSQL<br/>ERP database)]
     A -->|machine telemetry| B[Azure Event Hubs]
     P -->|incremental extraction| C[Azure Data Lake<br/>bronze]
-    B --> D[Azure Databricks]
+    B --> D[Microsoft Fabric]
     D --> C
-    C --> E[Databricks PySpark<br/>silver]
-    E -->|dbt models + tests| F[Gold layer<br/>Databricks SQL Warehouse]
+    C --> E[Fabric notebooks<br/>PySpark silver]
+    E -->|dbt models + tests| F[Gold layer<br/>Fabric Warehouse]
     F --> G[Power BI]
     H[Apache Airflow] -.orchestrates.-> P
     H -.orchestrates.-> E
@@ -50,7 +50,7 @@ flowchart LR
 
 ## Tech stack
 
-**Architecture:** the plant's ERP runs on a relational (OLTP) database. Data is extracted incrementally into a lakehouse on Azure — no separate data warehouse. Data is stored once in the data lake and the gold layer is served with SQL.
+**Architecture:** the plant's ERP runs on a relational (OLTP) database. Data is extracted incrementally into a lakehouse on Azure. Data is stored once in Delta format and the gold layer is served with SQL.
 
 | Layer | Tool |
 |---|---|
@@ -58,8 +58,8 @@ flowchart LR
 | Source system (ERP) | PostgreSQL (Docker) |
 | Storage (data lake) | Azure Data Lake Storage Gen2 + Delta Lake |
 | Streaming ingestion | Azure Event Hubs |
-| Processing | Azure Databricks (PySpark, SQL) |
-| Serving (warehouse layer) | Databricks SQL Warehouse |
+| Processing | Microsoft Fabric (Spark notebooks, PySpark, SQL) |
+| Serving (gold layer) | Fabric Warehouse |
 | Transformation & tests | dbt |
 | Orchestration | Apache Airflow (Docker) |
 | Simulator runtime | Python on Azure Container Apps |
@@ -73,7 +73,7 @@ flowchart LR
 erp/             ERP database schema (SQL) and local setup
 simulator/       Plant simulator (Python)
 ingestion/       Extraction from the ERP and Event Hubs ingestion
-databricks/      Bronze → silver processing (PySpark)
+processing/      Bronze → silver processing (PySpark notebooks)
 dbt/             Silver → gold models and tests (SQL)
 orchestration/   Airflow DAGs
 infra/           Terraform
@@ -89,6 +89,7 @@ Requirements: Docker Desktop.
 cp .env.example .env                        # then set your own password
 docker compose up -d                        # PostgreSQL ERP, schema and seed load on first start
 docker compose run --rm --build simulator   # simulate the plant from 2026-07-01 until now
+docker compose run --rm --build extractor   # extract what changed into Parquet (ingestion/out/bronze)
 ```
 
 The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
@@ -99,7 +100,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 
 - [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
 - [x] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
-- [ ] **Phase 2 — Batch lakehouse:** incremental extraction from the ERP into the Data Lake + Databricks with bronze and silver layers
+- [ ] **Phase 2 — Batch lakehouse:** incremental extraction from the ERP into the Data Lake and Microsoft Fabric, with bronze and silver layers
 - [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
 - [ ] **MVP:** first Power BI dashboard
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap

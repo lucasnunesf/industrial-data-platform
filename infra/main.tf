@@ -41,30 +41,10 @@ resource "azurerm_storage_data_lake_gen2_filesystem" "layer" {
   storage_account_id = azurerm_storage_account.lake.id
 }
 
-resource "azurerm_databricks_workspace" "main" {
-  name                        = "dbw-${local.name_base}-${local.suffix}"
-  resource_group_name         = azurerm_resource_group.main.name
-  location                    = azurerm_resource_group.main.location
-  sku                         = "premium"
-  managed_resource_group_name = "rg-${local.name_base}-dbw-managed"
-  tags                        = local.tags
-}
-
-resource "azurerm_databricks_access_connector" "main" {
-  name                = "dbac-${local.name_base}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  tags                = local.tags
-
-  identity {
-    type = "SystemAssigned"
-  }
-}
-
-resource "azurerm_role_assignment" "connector_lake" {
+resource "azurerm_role_assignment" "me_lake" {
   scope                = azurerm_storage_account.lake.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_databricks_access_connector.main.identity[0].principal_id
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_key_vault" "main" {
