@@ -69,3 +69,21 @@ Short architecture decision records (ADRs), in the order they were made.
 - The data is not copied: Fabric reads the lake directly, and both are in Brazil South.
 - The SAS token expires and has to be renewed; it is kept only in the Fabric connection.
 - Silver notebooks read from the shortcut and write Delta tables to the Lakehouse.
+
+## ADR-005: Silver is a full rebuild with the latest version per key
+
+**Status:** accepted
+
+**Context.** Bronze is append-only, so a row updated twice appears in two files (`sales_orders` had 412 rows in bronze for 390 distinct orders). The Lakehouse reads bronze through the shortcut from ADR-004.
+
+**Decision.**
+- One parametrized PySpark notebook (`processing/silver/01_build_silver.py`) reads each table from `Files/erp`, keeps the latest row per primary key (`updated_at`, then `_extracted_at`; event tables use `_extracted_at`) and overwrites the Delta table `silver_<table>`.
+- A second notebook (`02_test_silver.py`) checks that silver has the same number of keys as bronze, primary keys are unique and not null, foreign keys have no orphans and status columns hold only accepted values. It fails the run if any check fails.
+
+**Alternatives considered.**
+- Incremental merge into silver: avoids reprocessing, but adds state and complexity that 14 small tables do not need.
+
+**Consequences.**
+- Each run reprocesses all of bronze; this is acceptable at the current volume and would be revisited with `MERGE` if it grows.
+- The notebooks need `lh_industrial` attached as the default lakehouse. Without it, relative paths such as `Files/erp` fail with `400 Bad Request` and `saveAsTable` has no target.
+- The trial capacity allows few concurrent Spark sessions, so sessions should be stopped after each run.
