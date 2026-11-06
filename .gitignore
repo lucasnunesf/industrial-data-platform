@@ -228,3 +228,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 contexto.md
+# Local assistant instructions
+CLAUDE.md
