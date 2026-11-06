@@ -50,3 +50,22 @@ Short architecture decision records (ADRs), in the order they were made.
 - All resources of the environment share one region.
 - The data is synthetic, so data residency is not a concern.
 - Moving to another region later means recreating the storage account, because its region cannot be changed in place.
+
+## ADR-004: Bronze reaches Fabric through an ADLS Gen2 shortcut
+
+**Status:** accepted
+
+**Context.** The lake lives in the Azure subscription and the Fabric workspace belongs to a different Microsoft Entra tenant, so Fabric cannot read the storage with the signed-in identity.
+
+**Decision.**
+- The Parquet files are uploaded to the `bronze` filesystem of the ADLS Gen2 account with `ingestion/upload.py`, using the `az login` identity and the Storage Blob Data Contributor role.
+- The Fabric Lakehouse `lh_industrial` reads them in place through a OneLake shortcut to `bronze/erp`, authenticated with a read-only (Read, List) shared access signature on the storage account.
+
+**Alternatives considered.**
+- Uploading the files straight to OneLake: works without cross-tenant access, but leaves the lake and its Terraform code unused by Fabric.
+- Account key: works, but gives full control of the storage account.
+
+**Consequences.**
+- The data is not copied: Fabric reads the lake directly, and both are in Brazil South.
+- The SAS token expires and has to be renewed; it is kept only in the Fabric connection.
+- Silver notebooks read from the shortcut and write Delta tables to the Lakehouse.
