@@ -31,5 +31,21 @@ services:
       ERP_DB_PASSWORD: ${ERP_DB_PASSWORD}
       ERP_DB_NAME: ${ERP_DB_NAME}
 
+  extractor:
+    build: ./ingestion
+    profiles: ["extractor"]
+    depends_on:
+      erp-db:
+        condition: service_healthy
+    environment:
+      ERP_DB_HOST: erp-db
+      ERP_DB_PORT: "5432"
+      ERP_DB_USER: ${ERP_DB_USER}
+      ERP_DB_PASSWORD: ${ERP_DB_PASSWORD}
+      ERP_DB_NAME: ${ERP_DB_NAME}
+      BRONZE_DIR: /out/bronze
+    volumes:
+      - ./ingestion/out:/out
+
 volumes:
   erp-data:
