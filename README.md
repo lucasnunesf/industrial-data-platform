@@ -92,6 +92,12 @@ docker compose run --rm --build simulator   # simulate the plant from 2026-07-01
 docker compose run --rm --build extractor   # extract what changed into Parquet (ingestion/out/bronze)
 ```
 
+To send the extracted Parquet files to the data lake (requires `az login` and `pip install -r ingestion/requirements-upload.txt`):
+
+```bash
+python ingestion/upload.py --account <storage account name>
+```
+
 The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
 
 The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are documented in [docs/assumptions.md](docs/assumptions.md).
