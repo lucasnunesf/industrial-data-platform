@@ -35,5 +35,18 @@ Short architecture decision records (ADRs), in the order they were made.
 - Azure Databricks: more flexible for Spark and machine learning, multi-cloud, and stronger governance with Unity Catalog. For this size, running and sizing clusters adds more operational work than it returns.
 
 **Consequences.**
-- Fabric runs only on Azure and is billed by capacity, so the trial capacity is activated only when needed.
+- Fabric runs only on Azure and is billed by capacity; the trial capacity is limited to 60 days.
 - The Terraform code covers the lake and secrets; the Fabric workspace is created in the portal.
+
+## ADR-003: Azure region for the data lake
+
+**Status:** accepted
+
+**Context.** Creating the storage account and the Key Vault in West Europe was rejected by Azure for this subscription (`RequestDisallowedByAzure: the selected region is currently not accepting new customers`). Trial subscriptions can be restricted in some regions.
+
+**Decision.** The lake and the Key Vault are created in Brazil South, which the subscription accepts. The region is the default of the `location` variable in `infra/variables.tf`.
+
+**Consequences.**
+- All resources of the environment share one region.
+- The data is synthetic, so data residency is not a concern.
+- Moving to another region later means recreating the storage account, because its region cannot be changed in place.
