@@ -87,3 +87,25 @@ Short architecture decision records (ADRs), in the order they were made.
 - Each run reprocesses all of bronze; this is acceptable at the current volume and would be revisited with `MERGE` if it grows.
 - The notebooks need `lh_industrial` attached as the default lakehouse. Without it, relative paths such as `Files/erp` fail with `400 Bad Request` and `saveAsTable` has no target.
 - The trial capacity allows few concurrent Spark sessions, so sessions should be stopped after each run.
+
+## ADR-006: Gold layer design and dbt connection
+
+**Status:** accepted
+
+**Context.** The gold layer is built with `dbt-fabric` on a Fabric Warehouse. The Warehouse belongs to a different Microsoft Entra tenant than the Azure subscription. The business questions are bottlenecks, lead time per stage and on-time delivery.
+
+**Decision.**
+- Two facts at different grains: `fct_stage_execution` (one row per production order and routing step, with `duration_minutes` and `wait_minutes`, the gap since the previous stage finished) and `fct_order_delivery` (one row per sales order, with `lead_time_days`, `days_late` and `is_on_time`).
+- Four dimensions: customer, product, work center and machine.
+- Staging models are views over the silver tables of the Lakehouse (`lh_industrial.dbo.silver_*`); marts are tables in the `gold` schema. A `generate_schema_name` macro makes the schemas `staging` and `gold` instead of `dbo_staging` and `dbo_gold`.
+- dbt authenticates with `authentication: CLI`: the adapter takes the token from the `az login` session. The SQL endpoint comes from the `FABRIC_SQL_HOST` variable, so no secret or host is stored in the repository.
+- 22 data tests: keys, relationships, accepted values, plus singular tests for the fact grain and for finish after start.
+
+**Alternatives considered.**
+- `ActiveDirectoryInteractive`: failed with `Failed to authenticate the user ''`, because the adapter hands this mode to the driver without passing a user name.
+- A date dimension: left out of the MVP; Power BI uses the date columns of the facts.
+
+**Consequences.**
+- `wait_minutes` includes nights and weekends, because the simulated plant runs one shift from Monday to Friday. It compares stages with each other but is not real idle time.
+- A `dim_date` should be added if date-based analysis grows.
+- Running dbt needs an `az login` session for the Fabric account; when it differs from the Azure account, use a separate `AZURE_CONFIG_DIR`.

@@ -102,6 +102,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 | Infrastructure as code | Terraform (data lake, Key Vault) | ✅ |
 | Visualization | Power BI | in progress |
 | Streaming | Azure Event Hubs | planned |
+| Orchestration (MVP) | PowerShell script, `orchestration/run_pipeline.ps1` | ✅ |
 | Orchestration | Apache Airflow | planned |
 | CI/CD | GitHub Actions | planned |
 
@@ -115,13 +116,15 @@ processing/      Bronze → silver notebooks and data quality checks (PySpark)
 dbt/             Silver → gold models and tests (SQL)
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
-orchestration/   Airflow DAGs (planned)
+orchestration/   Pipeline runner script (Airflow DAGs planned)
 tests/           Automated tests (planned)
 ```
 
 ## Quick start
 
-Requirements: Docker Desktop.
+Requirements: Docker Desktop. The cloud steps also need an Azure subscription (Terraform in `infra/`) and a Microsoft Fabric workspace with a Lakehouse and a Warehouse.
+
+**1. Source and bronze (local)**
 
 ```bash
 cp .env.example .env                        # then set your own password
@@ -130,15 +133,35 @@ docker compose run --rm --build simulator   # simulate the plant from 2026-07-01
 docker compose run --rm --build extractor   # extract what changed into Parquet (ingestion/out/bronze)
 ```
 
-To send the extracted Parquet files to the data lake (requires `az login` and `pip install -r ingestion/requirements-upload.txt`):
+**2. Upload to the data lake** (requires `az login` and `pip install -r ingestion/requirements-upload.txt`):
 
 ```bash
 python ingestion/upload.py --account <storage account name>
 ```
 
+**3. Silver (Fabric).** The Lakehouse reads `bronze/erp` through a OneLake shortcut ([ADR-004](docs/decisions.md)). Import the notebooks from `processing/silver/`, attach the Lakehouse as the default one and run `01_build_silver` then `02_test_silver`.
+
+**4. Gold (dbt).** Requires `pip install dbt-fabric` (Python 3.12) and the Warehouse SQL endpoint:
+
+```powershell
+$env:FABRIC_SQL_HOST = "<warehouse>.datawarehouse.fabric.microsoft.com"
+az login --allow-no-subscriptions     # the account that owns the Fabric workspace
+dbt build --project-dir dbt --profiles-dir dbt
+```
+
+`orchestration/run_pipeline.ps1` chains all four steps and pauses for the manual silver run in Fabric.
+
 The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
 
 The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are documented in [docs/assumptions.md](docs/assumptions.md).
+
+## Design notes and limitations
+
+- **Silver is rebuilt in full on every run.** It is simple and idempotent at this volume ([ADR-005](docs/decisions.md)).
+- **`wait_minutes` includes nights and weekends**, because the simulated plant runs one shift from Monday to Friday. It compares stages with each other but is not real idle time ([ADR-006](docs/decisions.md)).
+- **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
+- **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
+- **There is no automated test suite for the Python code yet.** Data quality is covered by the silver checks and the dbt tests.
 
 ## Roadmap
 

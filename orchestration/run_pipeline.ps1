@@ -10,13 +10,19 @@
 
     Requirements: Docker Desktop open, `az login` on the Azure subscription that owns the lake,
     and the variables FABRIC_SQL_HOST and AZURE_STORAGE_ACCOUNT set (or passed as parameters).
+
+    Optional variables for tools that are not on the PATH:
+      IDP_UPLOAD_PYTHON          python with ingestion/requirements-upload.txt installed
+      IDP_DBT_EXE                dbt executable (dbt-fabric)
+      IDP_FABRIC_AZ_CONFIG_DIR   Azure CLI config folder logged in to the Fabric account
+                                 (default: ~\.azure-fabric)
 #>
 param(
     [string]$StorageAccount = $env:AZURE_STORAGE_ACCOUNT,
     [string]$FabricSqlHost = $env:FABRIC_SQL_HOST,
-    [string]$UploadPython = "A:\Lucas\idp-venv\Scripts\python.exe",
-    [string]$DbtExe = "A:\Lucas\dbt-venv\Scripts\dbt.exe",
-    [string]$FabricAzConfigDir = "A:\Lucas\azconfig-facens",
+    [string]$UploadPython = $(if ($env:IDP_UPLOAD_PYTHON) { $env:IDP_UPLOAD_PYTHON } else { "python" }),
+    [string]$DbtExe = $(if ($env:IDP_DBT_EXE) { $env:IDP_DBT_EXE } else { "dbt" }),
+    [string]$FabricAzConfigDir = $(if ($env:IDP_FABRIC_AZ_CONFIG_DIR) { $env:IDP_FABRIC_AZ_CONFIG_DIR } else { Join-Path $HOME ".azure-fabric" }),
     [switch]$SkipSimulator
 )
 
