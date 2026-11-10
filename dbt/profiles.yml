@@ -1,0 +1,10 @@
+industrial:
+  target: dev
+  outputs:
+    dev:
+      type: fabric
+      host: "{{ env_var('FABRIC_SQL_HOST') }}"
+      database: wh_industrial
+      schema: dbo
+      authentication: CLI
+      threads: 4

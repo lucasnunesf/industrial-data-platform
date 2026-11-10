@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: silver
+    database: lh_industrial
+    schema: dbo
+    tables:
+      - name: silver_customers
+      - name: silver_materials
+      - name: silver_work_centers
+      - name: silver_machines
+      - name: silver_routings
+      - name: silver_routing_steps
+      - name: silver_products
+      - name: silver_sales_orders
+      - name: silver_sales_order_items
+      - name: silver_production_orders
+      - name: silver_production_stage_events
+      - name: silver_shipments

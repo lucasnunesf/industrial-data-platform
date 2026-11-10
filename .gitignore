@@ -230,3 +230,7 @@ __marimo__/
 contexto.md
 # Local assistant instructions
 CLAUDE.md
+
+# dbt
+dbt/.user.yml
+dbt/logs/
