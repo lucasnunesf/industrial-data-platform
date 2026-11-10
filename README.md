@@ -1,6 +1,18 @@
 # Industrial Data Platform
 
-End-to-end data engineering platform on **Azure** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
+![Industrial Data Platform](docs/images/banner.png)
+
+![Azure](https://img.shields.io/badge/Azure-Data%20Lake%20Gen2-0078D4)
+![Microsoft Fabric](https://img.shields.io/badge/Microsoft%20Fabric-Lakehouse-117865)
+![dbt](https://img.shields.io/badge/dbt-gold%20layer-FF694B?logo=dbt&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![PySpark](https://img.shields.io/badge/PySpark-silver%20layer-E25A1C?logo=apachespark&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-ERP-4169E1?logo=postgresql&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-local%20stack-2496ED?logo=docker&logoColor=white)
+![Power BI](https://img.shields.io/badge/Power%20BI-dashboard-F2C811)
+
+End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
 > 🚧 **Work in progress** — see the [Roadmap](#roadmap) for current status.
 
@@ -9,7 +21,7 @@ End-to-end data engineering platform on **Azure** for metal fabrication plants, 
 Every order at AC Metais follows the same path:
 
 ```
-Order → Laser cutting → Metalworking / Boilermaking → Finishing → Shipping
+Order → Laser cutting → Fabrication → Finishing → Shipping
 ```
 
 Questions the business asks every day, and that are hard to answer without a data platform:
@@ -22,63 +34,89 @@ Questions the business asks every day, and that are hard to answer without a dat
 
 ## The solution
 
-A cloud data platform that extracts data from the plant's ERP and machines, organizes it in a lakehouse and turns it into decisions for production planning, finance and logistics.
+A cloud data platform that extracts data from the plant's ERP, organizes it in a lakehouse with bronze, silver and gold layers, and turns it into decisions for production planning.
+
+![Architecture overview](docs/images/architecture.png)
+
+<details>
+<summary><b>Technical architecture</b> (solid = built, dashed = planned)</summary>
 
 ```mermaid
 flowchart LR
-    A[Plant simulator<br/>Python] -->|orders, production, shipping| P[(PostgreSQL<br/>ERP database)]
-    A -->|machine telemetry| B[Azure Event Hubs]
-    P -->|incremental extraction| C[Azure Data Lake<br/>bronze]
-    B --> D[Microsoft Fabric]
-    D --> C
-    C --> E[Fabric notebooks<br/>PySpark silver]
+    A[Plant simulator<br/>Python] -->|orders, production, shipping| P[(PostgreSQL<br/>ERP)]
+    P -->|incremental extraction<br/>Parquet| C[ADLS Gen2<br/>bronze]
+    C -->|OneLake shortcut| E[Fabric notebooks<br/>PySpark silver]
     E -->|dbt models + tests| F[Gold layer<br/>Fabric Warehouse]
     F --> G[Power BI]
+    A -.machine telemetry.-> B[Azure Event Hubs]
+    B -.-> C
     H[Apache Airflow] -.orchestrates.-> P
     H -.orchestrates.-> E
     H -.orchestrates.-> F
 ```
 
+Each step and its trade-offs are recorded in [docs/decisions.md](docs/decisions.md).
+
+</details>
+
+### How the data flows
+
+| Layer | What happens | Where |
+|---|---|---|
+| **Source** | A simulator writes orders, production events, inspections and shipments into a PostgreSQL ERP | Docker |
+| **Bronze** | Only rows that changed since the last run are extracted to Parquet and uploaded to the lake | ADLS Gen2 |
+| **Silver** | PySpark keeps the latest version of each row and runs data quality checks | Fabric Lakehouse (Delta) |
+| **Gold** | dbt builds a star schema with tests | Fabric Warehouse |
+| **Consumption** | Dashboard for production planning | Power BI |
+
+## Data model
+
+The gold layer is a star schema with two facts at different grains, sharing the customer dimension.
+
+![Gold layer star schema](docs/images/data-model.png)
+
+| Table | Grain | Answers |
+|---|---|---|
+| `fct_stage_execution` | one row per production order and routing step | lead time per stage, bottlenecks, scrap |
+| `fct_order_delivery` | one row per sales order | order lead time, days late, on-time delivery |
+
 ### Modules
 
-| Module | Business question | Main techniques |
+| Module | Business question | Status |
 |---|---|---|
-| **Production planning (PCP)** | Bottlenecks, lead time per stage, late orders | Event modeling, daily snapshots |
-| **Laser machines** | Uptime, OEE, sheet metal yield and scrap | Streaming, time windows, high volume |
-| **Finance** | Real margin per order | Costing, slowly changing dimensions, real BRL exchange rates |
-| **Logistics** | On-time delivery, freight cost | Shipping integration, OTD metrics |
+| **Production planning (PCP)** | Bottlenecks, lead time per stage, late orders | ✅ data model ready |
+| **Laser machines** | Uptime, OEE, sheet metal yield and scrap | planned (streaming) |
+| **Finance** | Real margin per order | planned |
+| **Logistics** | On-time delivery, freight cost | partial (on-time delivery) |
 
 ## Tech stack
 
-**Architecture:** the plant's ERP runs on a relational (OLTP) database. Data is extracted incrementally into a lakehouse on Azure. Data is stored once in Delta format and the gold layer is served with SQL.
-
-| Layer | Tool |
-|---|---|
-| Cloud | Microsoft Azure |
-| Source system (ERP) | PostgreSQL (Docker) |
-| Storage (data lake) | Azure Data Lake Storage Gen2 + Delta Lake |
-| Streaming ingestion | Azure Event Hubs |
-| Processing | Microsoft Fabric (Spark notebooks, PySpark, SQL) |
-| Serving (gold layer) | Fabric Warehouse |
-| Transformation & tests | dbt |
-| Orchestration | Apache Airflow (Docker) |
-| Simulator runtime | Python on Azure Container Apps |
-| Security & monitoring | Azure Key Vault, Azure Monitor, Cost Management |
-| Infrastructure & DevOps | Terraform, Docker, GitHub Actions |
-| Visualization | Power BI |
+| Layer | Tool | Status |
+|---|---|---|
+| Source system (ERP) | PostgreSQL (Docker) | ✅ |
+| Plant simulator | Python (Faker, psycopg) | ✅ |
+| Extraction | Python, incremental by `updated_at` / primary key, Parquet | ✅ |
+| Storage (bronze) | Azure Data Lake Storage Gen2 | ✅ |
+| Processing (silver) | Microsoft Fabric notebooks (PySpark, Delta Lake) | ✅ |
+| Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |
+| Infrastructure as code | Terraform (data lake, Key Vault) | ✅ |
+| Visualization | Power BI | in progress |
+| Streaming | Azure Event Hubs | planned |
+| Orchestration | Apache Airflow | planned |
+| CI/CD | GitHub Actions | planned |
 
 ## Repository structure
 
 ```
-erp/             ERP database schema (SQL) and local setup
+erp/             ERP database schema and seed data (SQL)
 simulator/       Plant simulator (Python)
-ingestion/       Extraction from the ERP and Event Hubs ingestion
-processing/      Bronze → silver processing (PySpark notebooks)
+ingestion/       Incremental extraction from the ERP and upload to the lake
+processing/      Bronze → silver notebooks and data quality checks (PySpark)
 dbt/             Silver → gold models and tests (SQL)
-orchestration/   Airflow DAGs
 infra/           Terraform
-docs/            Architecture and technical decisions
-tests/           Automated tests
+docs/            Assumptions, technical decisions and images
+orchestration/   Airflow DAGs (planned)
+tests/           Automated tests (planned)
 ```
 
 ## Quick start
@@ -106,12 +144,12 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 
 - [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
 - [x] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
-- [ ] **Phase 2 — Batch lakehouse:** incremental extraction from the ERP into the Data Lake and Microsoft Fabric, with bronze and silver layers
-- [ ] **Phase 3 — PCP modeling:** dbt models for lead time, bottlenecks and data quality tests
+- [x] **Phase 2 — Batch lakehouse:** incremental extraction to Parquet, ADLS Gen2 bronze with Terraform, silver in Microsoft Fabric with data quality checks
+- [x] **Phase 3 — PCP modeling:** dbt star schema for lead time, bottlenecks and on-time delivery, with tests
 - [ ] **MVP:** first Power BI dashboard
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
-- [ ] **Phase 5 — Automation:** Airflow orchestration, CI/CD and infrastructure as code
-- [ ] **Phase 6 — Finance & logistics:** margin per order and on-time delivery
+- [ ] **Phase 5 — Automation:** Airflow orchestration and CI/CD
+- [ ] **Phase 6 — Finance & logistics:** margin per order and freight cost
 - [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
 
 ## About the data
