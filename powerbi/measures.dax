@@ -1,0 +1,43 @@
+// Create each measure with Home > New measure. Home table in brackets.
+
+// ---------- fct_order_delivery ----------
+
+Orders = DISTINCTCOUNT ( fct_order_delivery[sales_order_id] )
+
+Delivered Orders =
+CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[delivered_at] <> BLANK () )
+
+On-Time Orders =
+CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] = 1 )
+
+Late Orders =
+CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] = 0 )
+
+On-Time % = DIVIDE ( [On-Time Orders], [On-Time Orders] + [Late Orders] )
+
+Avg Lead Time (days) = AVERAGE ( fct_order_delivery[lead_time_days] )
+
+Avg Days Late (late orders) =
+CALCULATE ( AVERAGE ( fct_order_delivery[days_late] ), fct_order_delivery[is_on_time] = 0 )
+
+Order Value (BRL) = SUM ( fct_order_delivery[order_value_brl] )
+
+// ---------- fct_stage_execution ----------
+
+Stage Runs = COUNTROWS ( fct_stage_execution )
+
+Avg Duration (min) = AVERAGE ( fct_stage_execution[duration_minutes] )
+
+Avg Duration (h) = DIVIDE ( [Avg Duration (min)], 60 )
+
+Avg Wait (min) = AVERAGE ( fct_stage_execution[wait_minutes] )
+
+Avg Wait (h) = DIVIDE ( [Avg Wait (min)], 60 )
+
+Processing Hours = DIVIDE ( SUM ( fct_stage_execution[duration_minutes] ), 60 )
+
+Scrap % =
+DIVIDE (
+    SUM ( fct_stage_execution[scrap_quantity] ),
+    SUM ( fct_stage_execution[good_quantity] ) + SUM ( fct_stage_execution[scrap_quantity] )
+)

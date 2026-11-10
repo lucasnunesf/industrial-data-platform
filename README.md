@@ -114,6 +114,7 @@ simulator/       Plant simulator (Python)
 ingestion/       Incremental extraction from the ERP and upload to the lake
 processing/      Bronze → silver notebooks and data quality checks (PySpark)
 dbt/             Silver → gold models and tests (SQL)
+powerbi/         Dashboard measures (DAX) and layout
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
 orchestration/   Pipeline runner script (Airflow DAGs planned)
@@ -158,7 +159,8 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 ## Design notes and limitations
 
 - **Silver is rebuilt in full on every run.** It is simple and idempotent at this volume ([ADR-005](docs/decisions.md)).
-- **`wait_minutes` includes nights and weekends**, because the simulated plant runs one shift from Monday to Friday. It compares stages with each other but is not real idle time ([ADR-006](docs/decisions.md)).
+- **`wait_minutes` and `duration_minutes` are wall-clock times**, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time ([ADR-006](docs/decisions.md)).
+- **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
 - **There is no automated test suite for the Python code yet.** Data quality is covered by the silver checks and the dbt tests.
