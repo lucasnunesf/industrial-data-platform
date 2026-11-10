@@ -106,6 +106,7 @@ Short architecture decision records (ADRs), in the order they were made.
 - A date dimension: left out of the MVP; Power BI uses the date columns of the facts.
 
 **Consequences.**
-- `wait_minutes` includes nights and weekends, because the simulated plant runs one shift from Monday to Friday. It compares stages with each other but is not real idle time.
+- `wait_minutes` and `duration_minutes` are wall-clock differences between events, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time. Working-time versions would need a shift calendar.
+- The first stage of a routing (laser cutting) has no `wait_minutes`, because there is no previous stage to measure from.
 - A `dim_date` should be added if date-based analysis grows.
 - Running dbt needs an `az login` session for the Fabric account; when it differs from the Azure account, use a separate `AZURE_CONFIG_DIR`.
