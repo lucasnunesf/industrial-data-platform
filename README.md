@@ -14,7 +14,7 @@
 
 End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
-> 🚧 **Work in progress** — see the [Roadmap](#roadmap) for current status.
+> ✅ **MVP complete:** batch lakehouse and dashboard. Next: streaming, Airflow and CI/CD — see the [Roadmap](#roadmap).
 
 ## The problem
 
@@ -25,6 +25,8 @@ Every order at AC Metais follows the same path:
 ```
 Order → Laser cutting → Fabrication → Finishing → Shipping
 ```
+
+Some products also go through **laser welding** between cutting and fabrication.
 
 Questions the business asks every day, and that are hard to answer without a data platform:
 
