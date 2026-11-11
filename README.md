@@ -69,6 +69,16 @@ Each step and its trade-offs are recorded in [docs/decisions.md](docs/decisions.
 | **Gold** | dbt builds a star schema with tests | Fabric Warehouse |
 | **Consumption** | Dashboard for production planning | Power BI |
 
+## Dashboard
+
+![Dashboard demo](docs/images/dashboard-demo.gif)
+
+| Production bottlenecks | On-time delivery |
+|---|---|
+| ![Production bottlenecks page](docs/images/dashboard-production.png) | ![On-time delivery page](docs/images/dashboard-delivery.png) |
+
+Power BI on top of the gold layer. Orders wait the longest before laser welding and finishing, and 82% of the delivered orders arrived on time, with a dip in September. The report pages are generated as code; see [powerbi/](powerbi/).
+
 ## Data model
 
 The gold layer is a star schema with two facts at different grains, sharing the customer dimension.
@@ -100,7 +110,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 | Processing (silver) | Microsoft Fabric notebooks (PySpark, Delta Lake) | ✅ |
 | Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |
 | Infrastructure as code | Terraform (data lake, Key Vault) | ✅ |
-| Visualization | Power BI | in progress |
+| Visualization | Power BI (report pages generated as code, PBIR) | ✅ |
 | Streaming | Azure Event Hubs | planned |
 | Orchestration (MVP) | PowerShell script, `orchestration/run_pipeline.ps1` | ✅ |
 | Orchestration | Apache Airflow | planned |
@@ -114,7 +124,7 @@ simulator/       Plant simulator (Python)
 ingestion/       Incremental extraction from the ERP and upload to the lake
 processing/      Bronze → silver notebooks and data quality checks (PySpark)
 dbt/             Silver → gold models and tests (SQL)
-powerbi/         Dashboard measures (DAX) and layout
+powerbi/         Dashboard measures (DAX), layout and report generator
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
 orchestration/   Pipeline runner script (Airflow DAGs planned)
@@ -171,7 +181,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - [x] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
 - [x] **Phase 2 — Batch lakehouse:** incremental extraction to Parquet, ADLS Gen2 bronze with Terraform, silver in Microsoft Fabric with data quality checks
 - [x] **Phase 3 — PCP modeling:** dbt star schema for lead time, bottlenecks and on-time delivery, with tests
-- [ ] **MVP:** first Power BI dashboard
+- [x] **MVP:** Power BI dashboard for bottlenecks and on-time delivery
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
 - [ ] **Phase 5 — Automation:** Airflow orchestration and CI/CD
 - [ ] **Phase 6 — Finance & logistics:** margin per order and freight cost
