@@ -11,14 +11,14 @@ On-Time Orders =
 CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] = 1 )
 
 Late Orders =
-CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] = 0 )
+CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] == 0 )
 
 On-Time % = DIVIDE ( [On-Time Orders], [On-Time Orders] + [Late Orders] )
 
 Avg Lead Time (days) = AVERAGE ( fct_order_delivery[lead_time_days] )
 
 Avg Days Late (late orders) =
-CALCULATE ( AVERAGE ( fct_order_delivery[days_late] ), fct_order_delivery[is_on_time] = 0 )
+CALCULATE ( AVERAGE ( fct_order_delivery[days_late] ), fct_order_delivery[is_on_time] == 0 )
 
 Order Value (BRL) = SUM ( fct_order_delivery[order_value_brl] )
 
@@ -41,3 +41,11 @@ DIVIDE (
     SUM ( fct_stage_execution[scrap_quantity] ),
     SUM ( fct_stage_execution[good_quantity] ) + SUM ( fct_stage_execution[scrap_quantity] )
 )
+
+// Bar colour of the "Wait by stage" chart: the stage with the longest wait is orange.
+Wait Color =
+VAR MaxWait = MAXX ( ALLSELECTED ( dim_work_center[work_center_name] ), [Avg Wait (h)] )
+RETURN IF ( [Avg Wait (h)] = MaxWait, "#F2A93B", "#0B2545" )
+
+// Format strings: percentages 0.0%, hours and days 0.0, counts #,0
+// Use == for is_on_time: in DAX, BLANK = 0 is true, so = 0 would count open orders as late.
