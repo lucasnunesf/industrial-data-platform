@@ -36,7 +36,7 @@ Questions the business asks every day, and that are hard to answer without a dat
 
 A cloud data platform that extracts data from the plant's ERP, organizes it in a lakehouse with bronze, silver and gold layers, and turns it into decisions for production planning.
 
-![Architecture overview](docs/images/architecture.png)
+![Architecture: batch lakehouse on Azure and Microsoft Fabric](docs/images/architecture.png)
 
 <details>
 <summary><b>Technical architecture</b> (solid = built, dashed = planned)</summary>
