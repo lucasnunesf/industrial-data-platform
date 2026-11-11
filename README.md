@@ -18,6 +18,8 @@ End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for m
 
 ## The problem
 
+![Every order crosses five stages. Where does it get stuck?](docs/images/problem-overview.jpg)
+
 Every order at AC Metais follows the same path:
 
 ```
