@@ -113,7 +113,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 |---|---|---|
 | Source system (ERP) | PostgreSQL (Docker) | ✅ |
 | Plant simulator | Python (Faker, psycopg) | ✅ |
-| Extraction | Python, incremental by `updated_at` / primary key, Parquet | ✅ |
+| Extraction | Python, incremental by `updated_at` / `created_at` with an overlap window, Parquet | ✅ |
 | Storage (bronze) | Azure Data Lake Storage Gen2 | ✅ |
 | Processing (silver) | Microsoft Fabric notebooks (PySpark, Delta Lake) | ✅ |
 | Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |
@@ -136,7 +136,7 @@ powerbi/         Dashboard measures (DAX), layout and report generator
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
 orchestration/   Pipeline runner script (Airflow DAGs planned)
-tests/           Automated tests (planned)
+tests/           Reserved for cross-project tests (extraction tests live in ingestion/tests)
 ```
 
 ## Quick start
@@ -181,7 +181,8 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
-- **There is no automated test suite for the Python code yet.** Data quality is covered by the silver checks and the dbt tests.
+- **Python tests run locally, not in CI yet.** `ingestion/tests` (pytest, against a throwaway PostgreSQL database) covers the incremental extraction, including rows committed late. Data quality is covered by the silver checks and the dbt tests.
+- **`On-Time %` counts delivered orders only.** Orders past their promised date and not yet delivered are not included, so the figure can be optimistic.
 
 ## Roadmap
 
