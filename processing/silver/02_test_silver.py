@@ -8,7 +8,7 @@
 # %%
 from pyspark.sql import functions as F
 
-BRONZE_PATH = "Files/erp"
+BRONZE_PATH = "Files/erp_v2"
 
 PRIMARY_KEYS = {
     "customers": "customer_id",

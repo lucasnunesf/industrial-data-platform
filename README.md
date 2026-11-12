@@ -14,7 +14,7 @@
 
 End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
-> ✅ **MVP complete:** batch lakehouse and dashboard, with CI and a local Airflow DAG. Next: finance, logistics and laser streaming — see the [Roadmap](#roadmap).
+> ✅ **MVP complete:** batch lakehouse and dashboard, with order margin, freight, CI and a local Airflow DAG. Next: laser streaming — see the [Roadmap](#roadmap).
 
 ## The problem
 
@@ -85,18 +85,19 @@ Each step and its trade-offs are recorded in [docs/decisions.md](docs/decisions.
 |---|---|
 | ![Production bottlenecks page](docs/images/dashboard-production.png) | ![On-time delivery page](docs/images/dashboard-delivery.png) |
 
-Power BI on top of the gold layer. Orders wait the longest before laser welding and finishing, and 82% of the delivered orders arrived on time, with a dip in September. The report pages are generated as code; see [powerbi/](powerbi/).
+Power BI on top of the gold layer. Orders wait the longest before laser welding and finishing, and 82% of the orders were on time, with a dip in September; an order past its promised date and not yet delivered counts as late. Shipped orders keep about half of their revenue after material, processing and freight. The report pages are generated as code; see [powerbi/](powerbi/).
 
 ## Data model
 
-The gold layer is a star schema with two facts at different grains, sharing the customer dimension.
+The gold layer is a star schema with three facts at different grains, sharing the customer dimension.
 
 ![Gold layer star schema](docs/images/data-model.png)
 
 | Table | Grain | Answers |
 |---|---|---|
 | `fct_stage_execution` | one row per production order and routing step | lead time per stage, bottlenecks, scrap |
-| `fct_order_delivery` | one row per sales order | order lead time, days late, on-time delivery |
+| `fct_order_delivery` | one row per sales order | order lead time, days late, on-time delivery, freight |
+| `fct_order_margin` | one row per shipped sales order | revenue, material, processing and freight cost, margin |
 
 ### Modules
 
@@ -104,8 +105,8 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 |---|---|---|
 | **Production planning (PCP)** | Bottlenecks, lead time per stage, late orders | ✅ data model ready |
 | **Laser machines** | Uptime, OEE, sheet metal yield and scrap | planned (streaming) |
-| **Finance** | Real margin per order | planned |
-| **Logistics** | On-time delivery, freight cost | partial (on-time delivery) |
+| **Finance** | Real margin per order | ✅ data model ready |
+| **Logistics** | On-time delivery, freight cost | ✅ data model ready |
 
 ## Tech stack
 
@@ -158,7 +159,7 @@ docker compose run --rm --build extractor   # extract what changed into Parquet 
 python ingestion/upload.py --account <storage account name>
 ```
 
-**3. Silver (Fabric).** The Lakehouse reads `bronze/erp` through a OneLake shortcut ([ADR-004](docs/decisions.md)). Import the notebooks from `processing/silver/`, attach the Lakehouse as the default one and run `01_build_silver` then `02_test_silver`.
+**3. Silver (Fabric).** The Lakehouse reads `bronze/erp_v2` through a OneLake shortcut ([ADR-004](docs/decisions.md)). Import the notebooks from `processing/silver/`, attach the Lakehouse as the default one and run `01_build_silver` then `02_test_silver`.
 
 **4. Gold (dbt).** Requires `pip install dbt-fabric` (Python 3.12) and the Warehouse SQL endpoint:
 
@@ -193,13 +194,14 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 ## Design notes and limitations
 
 - **Silver is rebuilt in full on every run.** It is simple and idempotent at this volume ([ADR-005](docs/decisions.md)).
-- **`wait_minutes` and `duration_minutes` are wall-clock times**, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time ([ADR-006](docs/decisions.md)).
+- **`wait_minutes` and `duration_minutes` are wall-clock times**, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time ([ADR-006](docs/decisions.md)). Costs use `work_minutes`, the working time reported by the shop floor.
 - **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
 - **Airflow does not run the silver notebooks.** The Fabric workspace is in another tenant and is reached with a personal account, so the DAG waits for a manual approval at that step, and it is triggered by hand instead of on a schedule ([ADR-008](docs/decisions.md)).
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
 - **CI checks the code, not the data in the cloud.** On every pull request, GitHub Actions runs `ingestion/tests` (pytest, against a throwaway PostgreSQL database; covers the incremental extraction, including rows committed late), ruff, `terraform validate` and `dbt parse`. It does not connect to Azure or Fabric, so the silver checks and the dbt tests run in the pipeline, not in CI ([ADR-007](docs/decisions.md)).
-- **`On-Time %` counts delivered orders only.** Orders past their promised date and not yet delivered are not included, so the figure can be optimistic.
+- **Margin is a contribution margin, on simulated prices.** It is revenue minus material, processing and freight, and leaves out taxes, overhead and rework. Material prices, hourly rates and freight rates are invented; only the USD/BRL rate is real (PTAX, Banco Central do Brasil) ([ADR-009, ADR-010](docs/decisions.md)).
+- **The exchange rate file is a snapshot.** It ends on the day it was downloaded; later days use the last rate until `simulator/download_ptax.py` is run again.
 
 ## Roadmap
 
@@ -210,7 +212,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - [x] **MVP:** Power BI dashboard for bottlenecks and on-time delivery
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
 - [x] **Phase 5 — Automation:** CI on GitHub Actions and a local Airflow DAG
-- [ ] **Phase 6 — Finance & logistics:** margin per order and freight cost
+- [x] **Phase 6 — Finance & logistics:** margin per order and freight cost
 - [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
 
 ## About the data

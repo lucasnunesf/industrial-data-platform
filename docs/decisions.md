@@ -207,3 +207,21 @@ Short architecture decision records (ADRs), in the order they were made.
 - `On-Time %` is lower or equal to the old figure, and closer to what the customer sees.
 - The margin leaves out taxes, overhead and rework, so it is a contribution margin, not profit.
 - The margin logic was checked by running the models on PostgreSQL with the simulated ERP; on Fabric it is covered by the dbt tests (34 in total).
+
+## ADR-011: The bronze folder carries a schema version
+
+**Status:** accepted
+
+**Context.** Bronze is append-only and silver is rebuilt from all of it (ADR-001, ADR-005). ADR-009 added columns and a table to the ERP and required a new ERP database, so primary keys start again from 1. Old and new files in the same folder would mix two different histories under the same keys, and the old files lack the new columns.
+
+**Decision.**
+- The bronze folder of the source is `erp_v2` instead of `erp`. The name is a constant (`SOURCE_FOLDER` in `ingestion/config.py`, `BRONZE_PATH` in the silver notebooks) and is bumped when the source changes in a way old files cannot follow.
+- The old folder stays in the lake untouched. The Lakehouse gets a new shortcut, `Files/erp_v2`.
+
+**Alternatives considered.**
+- Deleting the old files: simpler, but it destroys raw data, which is what bronze exists to keep.
+- Reading old and new files together with schema merging: works for added columns, but not for a database whose keys were reset.
+
+**Consequences.**
+- Silver, gold and the report are rebuilt from the new folder only.
+- A real ERP would be migrated with `ALTER TABLE` and keep its keys, so the same folder could continue; the version bump is needed here because the simulated ERP was recreated.

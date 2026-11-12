@@ -9,7 +9,7 @@
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-BRONZE_PATH = "Files/erp"
+BRONZE_PATH = "Files/erp_v2"
 
 # table -> (primary key, columns that define "latest version", newest first)
 TABLES = {

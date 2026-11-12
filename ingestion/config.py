@@ -8,6 +8,10 @@ class Table:
     pk: str
 
 
+# Bronze folder of this source. The suffix is bumped when the ERP schema changes in a way that
+# old files cannot follow (v2: cost, freight and exchange rate columns), so versions never mix.
+SOURCE_FOLDER = "erp_v2"
+
 TABLES = [
     Table("customers", "updated_at", "customer_id"),
     Table("materials", "updated_at", "material_id"),
