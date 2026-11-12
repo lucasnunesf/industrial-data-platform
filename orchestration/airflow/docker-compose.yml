@@ -1,0 +1,38 @@
+# Local Airflow for the batch pipeline. Separate from the root docker-compose.yml on purpose:
+# the ERP database runs on its own and Airflow is optional.
+#
+#   docker compose up -d erp-db                                          (repository root)
+#   docker compose -f orchestration/airflow/docker-compose.yml up -d --build
+#   UI: http://localhost:8080   (local only, no login)
+
+name: idp-airflow
+
+services:
+  airflow:
+    build:
+      context: ../..
+      dockerfile: orchestration/airflow/Dockerfile
+    command: standalone
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - ../../.env                     # ERP_DB_USER, ERP_DB_PASSWORD, ERP_DB_NAME
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+      # The ERP container publishes port 5433 on the host.
+      ERP_DB_HOST: host.docker.internal
+      ERP_DB_PORT: "5433"
+      BRONZE_DIR: /opt/project/ingestion/out/bronze
+      PYTHONDONTWRITEBYTECODE: "1"
+      # Needed by the upload and dbt tasks only.
+      AZURE_STORAGE_ACCOUNT: ${AZURE_STORAGE_ACCOUNT:-}
+      FABRIC_SQL_HOST: ${FABRIC_SQL_HOST:-}
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+      - ../..:/opt/project:ro
+      - ../../ingestion/out:/opt/project/ingestion/out
+      - azure-logins:/opt/airflow/azure
+
+volumes:
+  azure-logins:

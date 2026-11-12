@@ -1,0 +1,5 @@
+# The image only needs the requirements files; everything else is mounted at run time.
+*
+!simulator/requirements.txt
+!ingestion/requirements.txt
+!ingestion/requirements-upload.txt
