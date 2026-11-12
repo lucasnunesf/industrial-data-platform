@@ -31,7 +31,19 @@ The production flow is based on the real operation of AC Metais. All numbers bel
 - Scrap rates: CUT 3%, WELD 1%, FAB 1.5%, FIN 0.5%.
 - Scrap propagates: each stage receives only the good output of the previous one, and its processing time is based on those units.
 - Quality inspects about 20% of production orders by sampling 20% of the units.
-- Material prices (BRL/kg): carbon steel 9, stainless steel 32, aluminum 38.
+- Sales price list (BRL/kg of material, used to price each product): carbon steel 9, stainless steel 32, aluminum 38.
+
+## Finance and logistics
+
+All prices and rates in this section are invented for the simulation. Only the exchange rate is real.
+
+- Material is bought in US dollars per kg: carbon steel 1.70, stainless steel 6.00, aluminum 7.20.
+- The USD/BRL rate is the real PTAX published by Banco Central do Brasil, downloaded once to `simulator/data/ptax_usd_brl.csv` (`simulator/download_ptax.py`). PTAX exists for business days only; a day without a rate uses the latest previous one.
+- The sales price list is fixed in BRL, so the margin moves with the exchange rate.
+- Hourly rate per work center (BRL): laser cutting 180, laser welding 150, fabrication 70, finishing 55, quality control 60.
+- Each `finish` event reports `work_minutes`, the working time spent on the stage. Unlike the difference between the start and finish timestamps, it has no nights or weekends.
+- Freight per shipment = order weight × rate per kg, with a minimum of BRL 120. Rates (BRL/kg): 0.35 inside São Paulo state, 0.60 to the other South and Southeast states, 1.10 elsewhere. The plant is in Sorocaba, SP.
+- Margin here means revenue minus material, machine and labor time at the work centers, and freight. It leaves out taxes, overhead and rework.
 
 ## Design choices
 

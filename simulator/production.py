@@ -36,10 +36,22 @@ def add_work(dt: datetime, minutes: float) -> datetime:
         dt = to_work(end)
 
 
+def freight_cost(state: str, weight_kg: float) -> float:
+    """Freight of one shipment: a rate per kg by distance from the plant, with a minimum charge."""
+    if state == cfg.PLANT_STATE:
+        region = "local"
+    elif state in cfg.NEAR_STATES:
+        region = "near"
+    else:
+        region = "far"
+    return round(max(cfg.FREIGHT_MINIMUM_BRL, weight_kg * cfg.FREIGHT_BRL_PER_KG[region]), 2)
+
+
 def load_context(conn) -> dict:
     ctx = {}
-    ctx["customers"] = [r[0] for r in conn.execute(
-        "SELECT customer_id FROM customers ORDER BY cnpj")]
+    customers = conn.execute("SELECT customer_id, state FROM customers ORDER BY cnpj").fetchall()
+    ctx["customers"] = [r[0] for r in customers]
+    ctx["customer_state"] = dict(customers)
     price = {m[0]: m[4] for m in cfg.MATERIALS}
     ctx["products"] = [
         (pid, routing, float(weight), price.get(mcode, 10.0))
@@ -117,12 +129,14 @@ def simulate(ctx: dict, until: datetime) -> dict:
             so_number = f"SO-{so_seq:06d}"
             promised = day + timedelta(days=rng.randint(*cfg.PROMISED_DAYS))
             lines_done, lines_started = [], []
+            order_weight = 0.0
 
             for line in range(1, rng.randint(*cfg.ITEMS_PER_ORDER) + 1):
                 pid, routing, weight, kg_price = rng.choice(ctx["products"])
                 qty = rng.randint(*cfg.QUANTITY_PER_ITEM)
                 price = round(weight * kg_price * 2.2 + 15 + rng.uniform(0, 10), 2)
                 out["items"].append((so_number, line, pid, qty, price))
+                order_weight += qty * weight
 
                 po_number = f"PO-{so_seq:06d}-{line}"
                 released_at = add_work(ordered_at, rng.uniform(60, 600))
@@ -145,8 +159,10 @@ def simulate(ctx: dict, until: datetime) -> dict:
                     machine, operator = resources[wc][k]
                     if wc == "WELD":
                         operator = rng.choice(ctx["operators"]["welder"])
-                    out["events"].append((po_number, step_id, "start", start, machine, operator, None, None))
-                    out["events"].append((po_number, step_id, "finish", finish, machine, operator, units - scrap, scrap))
+                    out["events"].append((po_number, step_id, "start", start, machine, operator, None, None, None))
+                    # work_minutes is the working time reported for the stage (no nights or weekends).
+                    out["events"].append((po_number, step_id, "finish", finish, machine, operator,
+                                          units - scrap, scrap, round(minutes, 1)))
                     first_start = first_start or start
                     ready = finish
                     units -= scrap
@@ -178,14 +194,17 @@ def simulate(ctx: dict, until: datetime) -> dict:
                 hour=rng.randint(9, 15), minute=rng.randint(0, 59))
             if shipped_at <= until:
                 so_status = "shipped"
-                delivered = delivered_at if delivered_at <= until else None
-                out["shipments"].append((f"SH-{so_seq:06d}", so_number, shipped_at, delivered,
-                                         "delivered" if delivered else "shipped"))
             elif min(lines_started) <= until:
                 so_status = "in_production"
             else:
                 so_status = "open"
-            out["orders"].append((so_number, rng.choice(ctx["customers"]), day, promised, so_status))
+            customer = rng.choice(ctx["customers"])
+            if so_status == "shipped":
+                delivered = delivered_at if delivered_at <= until else None
+                freight = freight_cost(ctx["customer_state"][customer], order_weight)
+                out["shipments"].append((f"SH-{so_seq:06d}", so_number, shipped_at, delivered,
+                                         "delivered" if delivered else "shipped", freight))
+            out["orders"].append((so_number, customer, day, promised, so_status))
         day += timedelta(days=1)
 
     out["events"] = [e for e in out["events"] if e[3] <= until]
@@ -236,11 +255,11 @@ def write(conn, data: dict) -> dict:
     cur.executemany(
         """INSERT INTO production_stage_events (production_order_id, routing_step_id, event_type,
                                                 event_ts, machine_id, operator_id,
-                                                good_quantity, scrap_quantity)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                                good_quantity, scrap_quantity, work_minutes)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (production_order_id, routing_step_id, event_type) DO NOTHING""",
-        [(po_ids[po], step, etype, aware(ts), m, o, good, scrap)
-         for po, step, etype, ts, m, o, good, scrap in data["events"]])
+        [(po_ids[po], step, etype, aware(ts), m, o, good, scrap, minutes)
+         for po, step, etype, ts, m, o, good, scrap, minutes in data["events"]])
 
     cur.executemany(
         """INSERT INTO quality_inspections (production_order_id, inspector_id, inspected_at,
@@ -252,12 +271,13 @@ def write(conn, data: dict) -> dict:
 
     cur.executemany(
         """INSERT INTO shipments (shipment_number, sales_order_id, shipped_at,
-                                  delivered_at, shipment_status)
-           VALUES (%s, %s, %s, %s, %s)
+                                  delivered_at, shipment_status, freight_cost_brl)
+           VALUES (%s, %s, %s, %s, %s, %s)
            ON CONFLICT (shipment_number) DO UPDATE
                SET delivered_at = EXCLUDED.delivered_at,
                    shipment_status = EXCLUDED.shipment_status
                WHERE shipments.shipment_status IS DISTINCT FROM EXCLUDED.shipment_status""",
-        [(sh, so_ids[so], aware(s), aware(d), st) for sh, so, s, d, st in data["shipments"]])
+        [(sh, so_ids[so], aware(s), aware(d), st, freight)
+         for sh, so, s, d, st, freight in data["shipments"]])
 
     return {k: len(v) for k, v in data.items()}

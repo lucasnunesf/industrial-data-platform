@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   extraction-tests:
-    name: Extraction tests (pytest + PostgreSQL)
+    name: Extraction and simulator tests (pytest + PostgreSQL)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -37,6 +37,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r ingestion/requirements.txt pytest
       - run: python -m pytest ingestion/tests
+      # Separate run: ingestion and simulator both have a module named db.
+      - run: python -m pytest simulator/tests
 
   lint:
     name: Lint (ruff)
