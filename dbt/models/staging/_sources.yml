@@ -17,3 +17,4 @@ sources:
       - name: silver_production_orders
       - name: silver_production_stage_events
       - name: silver_shipments
+      - name: silver_exchange_rates

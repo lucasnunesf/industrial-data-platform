@@ -2,7 +2,8 @@
 # Run it after 01_build_silver, with lh_industrial as the default lakehouse.
 
 # %% [markdown]
-# Checks: dedup against bronze, primary key unique and not null, foreign keys, accepted values.
+# Checks: dedup against bronze, primary key unique and not null, foreign keys, accepted values,
+# and amounts that can never be negative.
 
 # %%
 from pyspark.sql import functions as F
@@ -22,6 +23,7 @@ PRIMARY_KEYS = {
     "sales_order_items": "sales_order_item_id",
     "production_orders": "production_order_id",
     "shipments": "shipment_id",
+    "exchange_rates": "exchange_rate_id",
     "production_stage_events": "event_id",
     "quality_inspections": "inspection_id",
 }
@@ -55,6 +57,15 @@ ACCEPTED_VALUES = [
     ("quality_inspections", "inspection_result", ["approved", "rejected", "rework"]),
     ("shipments", "shipment_status", ["shipped", "delivered", "returned"]),
     ("operators", "operator_role", ["machine_operator", "unloader", "welder", "assembler", "finisher", "inspector"]),
+]
+
+# (table, column): prices, rates, costs and times that can never be negative
+NON_NEGATIVE = [
+    ("materials", "material_price_usd_per_kg"),
+    ("work_centers", "hourly_rate_brl"),
+    ("production_stage_events", "work_minutes"),
+    ("shipments", "freight_cost_brl"),
+    ("exchange_rates", "sell_rate_brl"),
 ]
 
 results = []
@@ -93,6 +104,11 @@ for child, column, parent in FOREIGN_KEYS:
 for table, column, allowed in ACCEPTED_VALUES:
     invalid = spark.table(f"silver_{table}").filter(~F.col(column).isin(allowed)).count()
     record(f"accepted_values_{column}", table, invalid)
+
+# %%
+for table, column in NON_NEGATIVE:
+    negative = spark.table(f"silver_{table}").filter(F.col(column) < 0).count()
+    record(f"non_negative_{column}", table, negative)
 
 # %%
 report = spark.createDataFrame(results, ["check", "table", "bad_rows", "status"])

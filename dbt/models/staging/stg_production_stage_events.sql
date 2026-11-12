@@ -7,5 +7,6 @@ select
     machine_id,
     operator_id,
     good_quantity,
-    scrap_quantity
+    scrap_quantity,
+    work_minutes
 from {{ source('silver', 'silver_production_stage_events') }}

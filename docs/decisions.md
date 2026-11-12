@@ -184,3 +184,26 @@ Short architecture decision records (ADRs), in the order they were made.
 - The rate file ends on the day it was downloaded; later simulated days use the last rate until `download_ptax.py` is run again.
 - The schema changed, and `CREATE TABLE IF NOT EXISTS` does not alter an existing table: the ERP database must be recreated (`docker compose down -v`), and bronze files written before this change do not have the new columns.
 - Prices and rates are invented; only the exchange rate is real ([assumptions](assumptions.md)).
+
+## ADR-010: Margin fact and on-time delivery that counts overdue orders
+
+**Status:** accepted
+
+**Context.** The ERP now carries material prices, exchange rates, working time and freight (ADR-009). Two gaps remained in the gold layer: there was no margin, and `On-Time %` counted delivered orders only, so an order past its promised date and still not delivered did not count as late.
+
+**Decision.**
+- `fct_order_margin`, one row per **shipped** sales order: revenue, material cost, processing cost, freight and margin, all in BRL. Orders still in production are left out, because their costs are not final.
+- Material cost = ordered quantity × unit weight × USD price per kg × the PTAX selling rate of the order date. PTAX exists for business days only, so the model takes the latest rate on or before the order date.
+- Processing cost = `work_minutes / 60 × hourly_rate_brl`, summed over the stages. It is stored per stage in `fct_stage_execution` (`work_minutes`, `stage_cost_brl`).
+- `scrap_material_cost_brl` shows how much of the material cost was lost as scrap. It is part of the material cost, not an extra cost.
+- `Margin %` is a measure (sum of margin ÷ sum of revenue), not a stored column, so it stays correct at any level of aggregation.
+- `fct_order_delivery` gets `is_overdue` (not delivered and past the promised date) and `freight_cost_brl`. `is_on_time` is now 0 for overdue orders too. The reference date is the last order date in the data, not the clock, so a rebuild gives the same result.
+
+**Alternatives considered.**
+- A margin fact per order line: more detail, but freight belongs to the shipment, so it would have to be split between lines by an arbitrary rule.
+- Using the current date as the reference for overdue orders: the result would change every day without new data.
+
+**Consequences.**
+- `On-Time %` is lower or equal to the old figure, and closer to what the customer sees.
+- The margin leaves out taxes, overhead and rework, so it is a contribution margin, not profit.
+- The margin logic was checked by running the models on PostgreSQL with the simulated ERP; on Fabric it is covered by the dbt tests (34 in total).

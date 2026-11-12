@@ -25,6 +25,7 @@ TABLES = {
     "sales_order_items": ("sales_order_item_id", ["updated_at", "_extracted_at"]),
     "production_orders": ("production_order_id", ["updated_at", "_extracted_at"]),
     "shipments": ("shipment_id", ["updated_at", "_extracted_at"]),
+    "exchange_rates": ("exchange_rate_id", ["updated_at", "_extracted_at"]),
     "production_stage_events": ("event_id", ["_extracted_at"]),
     "quality_inspections": ("inspection_id", ["_extracted_at"]),
 }
