@@ -114,3 +114,24 @@ Short architecture decision records (ADRs), in the order they were made.
 - The first stage of a routing (laser cutting) has no `wait_minutes`, because there is no previous stage to measure from.
 - A `dim_date` should be added if date-based analysis grows.
 - Running dbt needs an `az login` session for the Fabric account; when it differs from the Azure account, use a separate `AZURE_CONFIG_DIR`.
+
+## ADR-007: Continuous integration checks code without cloud access
+
+**Status:** accepted
+
+**Context.** Until now every check ran by hand on one machine. The pipeline also depends on Azure and on a Fabric workspace in another tenant, both reached with a personal `az login` session (ADR-004, ADR-006).
+
+**Decision.**
+- A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every pull request and on every push to `main`, with four independent jobs:
+  - `pytest ingestion/tests` against a PostgreSQL 17 service container, the same major version as the ERP;
+  - `ruff check`, limited to real errors (undefined names, unused imports, syntax), not style;
+  - `terraform fmt -check` and `terraform validate`, with `init -backend=false`, so no Azure credentials are needed;
+  - `dbt parse` with a placeholder `FABRIC_SQL_HOST`, which checks the project, the Jinja and the references between models without opening a connection.
+- The workflow has read-only permissions and uses no secrets.
+
+**Alternatives considered.**
+- Running `dbt build` and `terraform plan` in CI: they need credentials for Azure and for the Fabric tenant stored as GitHub secrets (a service principal), which this project does not have.
+
+**Consequences.**
+- CI catches broken Python, a broken extraction, invalid Terraform and a dbt project that does not compile. It does not catch a model that fails only when it runs on the Warehouse, or bad data; those are still caught by `dbt build` and by the silver checks when the pipeline runs.
+- There is no deployment step, so this is continuous integration, not continuous delivery.

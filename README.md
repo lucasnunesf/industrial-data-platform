@@ -122,7 +122,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 | Streaming | Azure Event Hubs | planned |
 | Orchestration (MVP) | PowerShell script, `orchestration/run_pipeline.ps1` | ✅ |
 | Orchestration | Apache Airflow | planned |
-| CI/CD | GitHub Actions | planned |
+| CI | GitHub Actions (pytest, ruff, Terraform validate, dbt parse) | ✅ |
 
 ## Repository structure
 
@@ -181,7 +181,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
-- **Python tests run locally, not in CI yet.** `ingestion/tests` (pytest, against a throwaway PostgreSQL database) covers the incremental extraction, including rows committed late. Data quality is covered by the silver checks and the dbt tests.
+- **CI checks the code, not the data in the cloud.** On every pull request, GitHub Actions runs `ingestion/tests` (pytest, against a throwaway PostgreSQL database; covers the incremental extraction, including rows committed late), ruff, `terraform validate` and `dbt parse`. It does not connect to Azure or Fabric, so the silver checks and the dbt tests run in the pipeline, not in CI ([ADR-007](docs/decisions.md)).
 - **`On-Time %` counts delivered orders only.** Orders past their promised date and not yet delivered are not included, so the figure can be optimistic.
 
 ## Roadmap
