@@ -14,7 +14,7 @@
 
 End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
-> ✅ **MVP complete:** batch lakehouse and dashboard. Next: streaming, Airflow and CI/CD — see the [Roadmap](#roadmap).
+> ✅ **MVP complete:** batch lakehouse and dashboard, with CI and a local Airflow DAG. Next: finance, logistics and laser streaming — see the [Roadmap](#roadmap).
 
 ## The problem
 
@@ -56,9 +56,9 @@ flowchart LR
     F --> G[Power BI]
     A -.machine telemetry.-> B[Azure Event Hubs]
     B -.-> C
-    H[Apache Airflow] -.orchestrates.-> P
-    H -.orchestrates.-> E
-    H -.orchestrates.-> F
+    H[Apache Airflow] -->|orchestrates| P
+    H -->|manual approval| E
+    H -->|orchestrates| F
 ```
 
 Each step and its trade-offs are recorded in [docs/decisions.md](docs/decisions.md).
@@ -121,7 +121,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 | Visualization | Power BI (report pages generated as code, PBIR) | ✅ |
 | Streaming | Azure Event Hubs | planned |
 | Orchestration (MVP) | PowerShell script, `orchestration/run_pipeline.ps1` | ✅ |
-| Orchestration | Apache Airflow | planned |
+| Orchestration | Apache Airflow 3 (local, Docker), `orchestration/airflow/` | ✅ |
 | CI | GitHub Actions (pytest, ruff, Terraform validate, dbt parse) | ✅ |
 
 ## Repository structure
@@ -135,7 +135,7 @@ dbt/             Silver → gold models and tests (SQL)
 powerbi/         Dashboard measures (DAX), layout and report generator
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
-orchestration/   Pipeline runner script (Airflow DAGs planned)
+orchestration/   Pipeline runner script and local Airflow (DAG, image, compose)
 tests/           Reserved for cross-project tests (extraction tests live in ingestion/tests)
 ```
 
@@ -170,6 +170,22 @@ dbt build --project-dir dbt --profiles-dir dbt
 
 `orchestration/run_pipeline.ps1` chains all four steps and pauses for the manual silver run in Fabric.
 
+**Airflow (optional).** The same pipeline as a DAG, with logs, retries and history per step. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST` first:
+
+```powershell
+docker compose up -d erp-db
+docker compose -f orchestration/airflow/docker-compose.yml up -d --build    # the image is about 5 GB
+```
+
+Open http://localhost:8080 and trigger `industrial_pipeline`. The upload and dbt tasks take their token from the Azure CLI inside the container, so log in once per tenant (the logins are kept in a Docker volume):
+
+```powershell
+docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/lake airflow az login --use-device-code
+docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/fabric airflow az login --use-device-code --allow-no-subscriptions
+```
+
+The DAG stops at `wait_for_silver` until someone runs the notebooks in Fabric and approves the task in the Airflow UI ([ADR-008](docs/decisions.md)).
+
 The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
 
 The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are documented in [docs/assumptions.md](docs/assumptions.md).
@@ -179,6 +195,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - **Silver is rebuilt in full on every run.** It is simple and idempotent at this volume ([ADR-005](docs/decisions.md)).
 - **`wait_minutes` and `duration_minutes` are wall-clock times**, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time ([ADR-006](docs/decisions.md)).
 - **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
+- **Airflow does not run the silver notebooks.** The Fabric workspace is in another tenant and is reached with a personal account, so the DAG waits for a manual approval at that step, and it is triggered by hand instead of on a schedule ([ADR-008](docs/decisions.md)).
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
 - **CI checks the code, not the data in the cloud.** On every pull request, GitHub Actions runs `ingestion/tests` (pytest, against a throwaway PostgreSQL database; covers the incremental extraction, including rows committed late), ruff, `terraform validate` and `dbt parse`. It does not connect to Azure or Fabric, so the silver checks and the dbt tests run in the pipeline, not in CI ([ADR-007](docs/decisions.md)).
@@ -192,7 +209,7 @@ The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Si
 - [x] **Phase 3 — PCP modeling:** dbt star schema for lead time, bottlenecks and on-time delivery, with tests
 - [x] **MVP:** Power BI dashboard for bottlenecks and on-time delivery
 - [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
-- [ ] **Phase 5 — Automation:** Airflow orchestration and CI/CD
+- [x] **Phase 5 — Automation:** CI on GitHub Actions and a local Airflow DAG
 - [ ] **Phase 6 — Finance & logistics:** margin per order and freight cost
 - [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
 

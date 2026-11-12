@@ -135,3 +135,27 @@ Short architecture decision records (ADRs), in the order they were made.
 **Consequences.**
 - CI catches broken Python, a broken extraction, invalid Terraform and a dbt project that does not compile. It does not catch a model that fails only when it runs on the Warehouse, or bad data; those are still caught by `dbt build` and by the silver checks when the pipeline runs.
 - There is no deployment step, so this is continuous integration, not continuous delivery.
+
+## ADR-008: Local Airflow with a manual gate for silver
+
+**Status:** accepted
+
+**Context.** The MVP pipeline is a PowerShell script (`orchestration/run_pipeline.ps1`): it runs the steps in order, but keeps no history, has no retries and shows nothing while it runs. The silver notebooks run in a Fabric workspace of another tenant, reached with a personal account (ADR-004, ADR-006).
+
+**Decision.**
+- Apache Airflow 3 runs locally in one container (`airflow standalone`), from its own compose file in `orchestration/airflow/`, so the ERP database does not depend on it. The UI is published on `127.0.0.1` only and has no login.
+- One DAG, `industrial_pipeline`: `simulate_plant` → `extract_to_bronze` → `upload_to_lake` → `wait_for_silver` → `build_gold`. Each task is a `BashOperator` that calls the same scripts as the PowerShell runner; the repository is mounted read-only, except the bronze output folder.
+- `wait_for_silver` is an `ApprovalOperator`: the run stops until a person runs the two notebooks in Fabric and approves the task in the UI.
+- The pipeline tools live in three virtual environments inside the image (simulator/extraction/upload, dbt, Azure CLI), so their dependencies never clash with Airflow's.
+- The upload and dbt tasks use two Azure CLI logins, one per tenant, selected with `AZURE_CONFIG_DIR` and kept in a Docker volume. No secret is stored in the repository or in Airflow.
+- The DAG has no schedule and allows one active run: it runs on a laptop, has a manual step, and the extraction keeps its watermarks in a single state file.
+
+**Alternatives considered.**
+- Triggering the notebooks through the Fabric REST API: needs a service principal in the Fabric tenant, which this project does not have.
+- Running each step in its own container (`DockerOperator`): closer to production, but the Airflow container would need access to the Docker socket of the host.
+
+**Consequences.**
+- Each step has logs, one automatic retry and a run history, and a failed step can be rerun alone.
+- The pipeline is not fully automatic: without the approval, gold is not rebuilt.
+- The image is large (about 5 GB), mostly because of the Azure CLI.
+- The Airflow metadata is a SQLite file inside the container, so the run history is lost when the container is recreated. A production setup would use PostgreSQL and a scheduler separate from the web server.
