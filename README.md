@@ -113,7 +113,7 @@ The gold layer is a star schema with two facts at different grains, sharing the 
 |---|---|---|
 | Source system (ERP) | PostgreSQL (Docker) | ✅ |
 | Plant simulator | Python (Faker, psycopg) | ✅ |
-| Extraction | Python, incremental by `updated_at` / primary key, Parquet | ✅ |
+| Extraction | Python, incremental by `updated_at` / `created_at` with an overlap window, Parquet | ✅ |
 | Storage (bronze) | Azure Data Lake Storage Gen2 | ✅ |
 | Processing (silver) | Microsoft Fabric notebooks (PySpark, Delta Lake) | ✅ |
 | Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |

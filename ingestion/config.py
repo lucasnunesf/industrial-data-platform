@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Table:
     name: str
-    mode: str  # "updated_at": mutable rows; "id": append-only rows
+    cursor_column: str  # time column used as the watermark
     pk: str
 
 
@@ -21,6 +21,6 @@ TABLES = [
     Table("sales_order_items", "updated_at", "sales_order_item_id"),
     Table("production_orders", "updated_at", "production_order_id"),
     Table("shipments", "updated_at", "shipment_id"),
-    Table("production_stage_events", "id", "event_id"),
-    Table("quality_inspections", "id", "inspection_id"),
+    Table("production_stage_events", "created_at", "event_id"),
+    Table("quality_inspections", "created_at", "inspection_id"),
 ]

@@ -6,18 +6,21 @@ Short architecture decision records (ADRs), in the order they were made.
 
 **Status:** accepted
 
-**Context.** The ERP runs on PostgreSQL. Twelve tables are mutable and carry an `updated_at` column maintained by a trigger. Two tables (`production_stage_events`, `quality_inspections`) are append-only and have an increasing primary key.
+**Context.** The ERP runs on PostgreSQL. Twelve tables are mutable and carry an `updated_at` column maintained by a trigger. Two tables (`production_stage_events`, `quality_inspections`) are append-only and carry a `created_at` column. Both timestamps come from `now()`, which is the start of the writing transaction, but a row becomes visible to other sessions only when that transaction commits.
 
 **Decision.**
-- Mutable tables are extracted by `updated_at` with a per-table watermark; append-only tables by primary key.
+- Every table is extracted by a time column with a per-table watermark: `updated_at` for mutable tables, `created_at` for append-only tables.
+- Each window starts a configurable overlap (default 60 minutes, `--overlap-minutes`) before the watermark, so a row committed after a run started is read by the next run.
 - All tables are read in one `REPEATABLE READ`, read-only transaction, so they share a single consistent snapshot. The upper bound of each window is the database `now()` taken at the start of the run.
 - The Arrow schema is derived from `information_schema.columns`, so decimal precision matches the source exactly.
 - Each row gets `_extracted_at` and `_batch_id`. Files are written as `erp/<table>/ingestion_date=YYYY-MM-DD/<table>_<run_id>.parquet`, and state is stored in `_state/watermarks.json`.
 - Bronze is append-only. The state is saved after each table, so delivery is at-least-once.
 
 **Consequences.**
-- A row updated twice appears in two files; silver keeps the latest version per primary key.
-- A transaction that commits after the cutoff but carries an older `updated_at` can be missed. The simulator does not produce this case; a production setup would add an overlap window.
+- A row updated twice, or read again inside the overlap, appears in several files; silver keeps the latest version per primary key.
+- A transaction that stays open longer than the overlap can still be missed. Exact alternatives are filtering by commit time with `track_commit_timestamp`, or change data capture from the write-ahead log (logical replication); both need server changes or a new tool.
+- Append-only tables were first extracted by primary key. Sequence values are assigned at insert, not at commit, so with concurrent writers a lower id can commit after a higher one and be skipped; the time column with overlap closes that gap. Old integer watermarks restart from the epoch once.
+- Both cases are covered by tests in `ingestion/tests` that commit a change after an extraction has started.
 
 ## ADR-002: Microsoft Fabric for processing and serving
 

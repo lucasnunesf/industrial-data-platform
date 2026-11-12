@@ -1,7 +1,8 @@
 """Incremental extraction from the ERP (PostgreSQL) to Parquet files (bronze).
 
-Mutable tables are pulled by updated_at, append-only tables by primary key.
-Bronze is append-only: a row updated twice shows up in two files, and silver
+Every table is pulled by a time column (updated_at, or created_at for append-only
+tables) with an overlap window, so rows committed after an extraction started are
+caught by the next one. Bronze is append-only: a row updated twice shows up in two files, and silver
 keeps the latest version. Delivery is at-least-once (state is saved after each
 table's file is written).
 """
@@ -9,7 +10,7 @@ table's file is written).
 import argparse
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg
@@ -21,6 +22,7 @@ from db import connect
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 TS_UTC = pa.timestamp("us", tz="UTC")
+DEFAULT_OVERLAP = timedelta(minutes=60)
 
 
 def arrow_type(data_type: str, precision: int | None, scale: int | None) -> pa.DataType:
@@ -74,25 +76,22 @@ def extract_table(
     started_at: datetime,
     run_id: str,
     out_dir: Path,
+    overlap: timedelta = DEFAULT_OVERLAP,
 ) -> int:
     schema = table_schema(conn, table.name)
     cols = ", ".join(schema.names)
 
-    if table.mode == "updated_at":
-        last = datetime.fromisoformat(state[table.name]) if table.name in state else EPOCH
-        sql = (
-            f"SELECT {cols} FROM {table.name} "
-            f"WHERE updated_at > %s AND updated_at <= %s ORDER BY updated_at, {table.pk}"
-        )
-        params = (last, started_at)
-        new_mark = started_at.isoformat()
-    else:
-        last_id = state.get(table.name, 0)
-        sql = f"SELECT {cols} FROM {table.name} WHERE {table.pk} > %s ORDER BY {table.pk}"
-        params = (last_id,)
-        new_mark = None
-
-    rows = conn.execute(sql, params).fetchall()
+    # A row gets its timestamp when its transaction starts but becomes visible only at commit,
+    # so the window starts `overlap` before the watermark. Marks from the old id-based state
+    # (integers) restart from the epoch once; silver drops the duplicates.
+    mark = state.get(table.name)
+    last = datetime.fromisoformat(mark) if isinstance(mark, str) else EPOCH
+    column = table.cursor_column
+    sql = (
+        f"SELECT {cols} FROM {table.name} "
+        f"WHERE {column} > %s AND {column} <= %s ORDER BY {column}, {table.pk}"
+    )
+    rows = conn.execute(sql, (last - overlap, started_at)).fetchall()
 
     if rows:
         arrays = [pa.array([r[i] for r in rows], type=f.type) for i, f in enumerate(schema)]
@@ -108,11 +107,7 @@ def extract_table(
         pq.write_table(data, tmp, compression="snappy")
         tmp.replace(final)
 
-        if table.mode == "id":
-            new_mark = rows[-1][schema.names.index(table.pk)]
-
-    if new_mark is not None:
-        state[table.name] = new_mark
+    state[table.name] = started_at.isoformat()
     return len(rows)
 
 
@@ -120,7 +115,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract ERP tables to Parquet (bronze).")
     parser.add_argument("--out", default=os.getenv("BRONZE_DIR", "./out/bronze"))
     parser.add_argument("--full-refresh", action="store_true", help="ignore saved watermarks")
+    parser.add_argument("--overlap-minutes", type=int, default=60,
+                        help="re-read this window before the watermark to catch late commits")
     args = parser.parse_args()
+    overlap = timedelta(minutes=args.overlap_minutes)
 
     out_dir = Path(args.out)
     state_path = out_dir / "_state" / "watermarks.json"
@@ -134,7 +132,7 @@ def main() -> None:
         print(f"run {run_id} -> {out_dir}")
 
         for table in TABLES:
-            count = extract_table(conn, table, state, started_at, run_id, out_dir)
+            count = extract_table(conn, table, state, started_at, run_id, out_dir, overlap)
             save_state(state_path, state)
             print(f"  {table.name}: {count} rows")
 
