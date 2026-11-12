@@ -3,7 +3,7 @@
 Usage: python powerbi/build_report.py "<path>/<name>.Report"
 
 Save the report in Power BI Desktop as a Power BI Project (.pbip) first. The script
-rewrites both pages, registers the custom theme and leaves the semantic model untouched;
+rewrites the three pages, registers the custom theme and leaves the semantic model untouched;
 the measures it uses are in measures.dax. Power BI Desktop reloads the project when the
 option "Detect and reload external changes of PBIP" is enabled.
 """
@@ -25,6 +25,7 @@ SCHEMA_PAGES = "https://developer.microsoft.com/json-schemas/fabric/item/report/
 
 PAGE1 = "9c09fdeea404d80bbec3"
 PAGE2 = "55281a6a74630230f723"
+PAGE3 = "7d3e1b9a5c2f48a6e0b4"
 
 NAVY, BLUE, ORANGE = "#0B2545", "#1F6FB2", "#F2A93B"
 SOFT, CANVAS, LINE, MUTED, WHITE = "#C9DCF0", "#EEF2F7", "#D9E2EC", "#627D98", "#FFFFFF"
@@ -210,7 +211,7 @@ def slicer(label, entity, prop, x, w, order, title):
                            "items": [{"properties": {"textSize": lit("13D"), "fontColor": color(NAVY)}}]})
 
 
-S, D = "fct_stage_execution", "fct_order_delivery"
+S, D, M = "fct_stage_execution", "fct_order_delivery", "fct_order_margin"
 SUB = "AC Metais · synthetic data"
 ROW2_Y, ROW2_H, ROW3_Y, ROW3_H = 255, 400, 675, 390
 
@@ -328,6 +329,47 @@ page2 += [
                                 f"{D}.promised_date": 200, f"{D}.delivered_at": 270, f"{D}.days_late": 160})),
 ]
 
+page3 = title_block("p3", "Order margin", SUB)
+page3 += [
+    slicer("p3-slicer-state", "dim_customer", "state", 1340, 270, 2, "State"),
+    slicer("p3-slicer-customer", "dim_customer", "company_name", 1630, 270, 3, "Customer"),
+]
+page3 += kpis("p3", [
+    (M, "Margin %", "💰  Margin", ORANGE),
+    (M, "Revenue (BRL)", "🧾  Revenue (BRL)", None),
+    (M, "Material Cost (BRL)", "🔩  Material (BRL)", None),
+    (M, "Freight Cost (BRL)", "🚚  Freight (BRL)", None),
+])
+page3 += [
+    visual("p3-hero-month", "clusteredColumnChart", 20, ROW2_Y, 1180, ROW2_H, 30,
+           title="Margin by month · shipped orders",
+           objects=solid_bars(NAVY),
+           roles={"Category": [month(M, "order_date")],
+                  "Y": [measure(M, "Margin %", "Margin")]}),
+    visual("p3-donut", "donutChart", 1220, ROW2_Y, 680, ROW2_H, 31,
+           title="Where the revenue goes",
+           objects={"labels": labels_on(labelStyle=lit("'Category, percent of total'")),
+                    "legend": [{"properties": {"show": lit("false")}}]},
+           roles={"Y": [measure(M, "Material Cost (BRL)", "Material"),
+                        measure(M, "Processing Cost (BRL)", "Processing"),
+                        measure(M, "Freight Cost (BRL)", "Freight"),
+                        measure(M, "Margin (BRL)", "Margin")]}),
+    visual("p3-state", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
+           title="Freight share of revenue by state",
+           objects=solid_bars(ORANGE), sort=msr_field(M, "Freight % of Revenue"), roles={
+               "Category": [column("dim_customer", "state")],
+               "Y": [measure(M, "Freight % of Revenue", "Freight / revenue")]}),
+    visual("p3-table-orders", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
+           title="Orders by revenue",
+           sort=msr_field(M, "Revenue (BRL)"), roles={
+               "Values": [column(M, "sales_order_number", "Order"),
+                          column("dim_customer", "company_name", "Customer"),
+                          measure(M, "Revenue (BRL)", "Revenue"), measure(M, "Margin (BRL)", "Margin"),
+                          measure(M, "Margin %", "Margin %")]},
+           objects=table_style({f"{M}.sales_order_number": 170, "dim_customer.company_name": 250,
+                                f"{M}.Revenue (BRL)": 220, f"{M}.Margin (BRL)": 220, f"{M}.Margin %": 160})),
+]
+
 
 def write_page(page_id, display_name, visuals):
     page_dir = REPORT / "pages" / page_id
@@ -360,8 +402,9 @@ report_file.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
 write_page(PAGE1, "Production bottlenecks", page1)
 write_page(PAGE2, "On-time delivery", page2)
+write_page(PAGE3, "Order margin", page3)
 (REPORT / "pages" / "pages.json").write_text(json.dumps({
-    "$schema": SCHEMA_PAGES, "pageOrder": [PAGE1, PAGE2], "activePageName": PAGE1}, indent=2), encoding="utf-8")
+    "$schema": SCHEMA_PAGES, "pageOrder": [PAGE1, PAGE2, PAGE3], "activePageName": PAGE1}, indent=2), encoding="utf-8")
 
 for f in ROOT.rglob("*.json"):
     json.loads(f.read_text(encoding="utf-8"))

@@ -54,3 +54,15 @@ There is no relationship between `dim_machine` and `dim_work_center`: it would c
 - Wait and duration are wall-clock times and include nights and weekends (ADR-006). They compare stages; they are not machine time.
 - Laser cutting is the first stage of every routing, so it has no wait.
 - On time only counts delivered orders; open orders have no `is_on_time`.
+
+## Page 3: Order margin
+
+Source: `fct_order_margin` (one row per shipped sales order), related to `dim_customer` by `customer_id`.
+
+- Cards: Margin %, Revenue, Material cost, Freight cost.
+- Margin % by month of the order date.
+- Donut: how revenue splits into material, processing, freight and margin.
+- Freight as a share of revenue by customer state.
+- Table of orders with revenue, margin and margin %.
+
+Margin = revenue − material − processing − freight. It leaves out taxes, overhead and rework.

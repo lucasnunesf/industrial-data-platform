@@ -10,8 +10,12 @@ CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[delivered_at] <
 On-Time Orders =
 CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] = 1 )
 
+// Late = delivered after the promised date, or past the promised date and not delivered yet.
 Late Orders =
 CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_on_time] == 0 )
+
+Overdue Orders =
+CALCULATE ( COUNTROWS ( fct_order_delivery ), fct_order_delivery[is_overdue] = 1 )
 
 On-Time % = DIVIDE ( [On-Time Orders], [On-Time Orders] + [Late Orders] )
 
@@ -21,6 +25,27 @@ Avg Days Late (late orders) =
 CALCULATE ( AVERAGE ( fct_order_delivery[days_late] ), fct_order_delivery[is_on_time] == 0 )
 
 Order Value (BRL) = SUM ( fct_order_delivery[order_value_brl] )
+
+// ---------- fct_order_margin (shipped orders only) ----------
+
+Revenue (BRL) = SUM ( fct_order_margin[revenue_brl] )
+
+Material Cost (BRL) = SUM ( fct_order_margin[material_cost_brl] )
+
+Processing Cost (BRL) = SUM ( fct_order_margin[processing_cost_brl] )
+
+Freight Cost (BRL) = SUM ( fct_order_margin[freight_cost_brl] )
+
+Margin (BRL) = SUM ( fct_order_margin[margin_brl] )
+
+Margin % = DIVIDE ( [Margin (BRL)], [Revenue (BRL)] )
+
+Freight % of Revenue = DIVIDE ( [Freight Cost (BRL)], [Revenue (BRL)] )
+
+// Material bought and lost as scrap; it is already inside Material Cost.
+Scrap Material Cost (BRL) = SUM ( fct_order_margin[scrap_material_cost_brl] )
+
+Avg USD/BRL Rate = AVERAGE ( fct_order_margin[usd_brl_rate] )
 
 // ---------- fct_stage_execution ----------
 
@@ -35,6 +60,11 @@ Avg Wait (min) = AVERAGE ( fct_stage_execution[wait_minutes] )
 Avg Wait (h) = DIVIDE ( [Avg Wait (min)], 60 )
 
 Processing Hours = DIVIDE ( SUM ( fct_stage_execution[duration_minutes] ), 60 )
+
+// Working time reported by the shop floor: no nights or weekends.
+Work Hours = DIVIDE ( SUM ( fct_stage_execution[work_minutes] ), 60 )
+
+Stage Cost (BRL) = SUM ( fct_stage_execution[stage_cost_brl] )
 
 Scrap % =
 DIVIDE (

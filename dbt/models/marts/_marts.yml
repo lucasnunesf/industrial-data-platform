@@ -15,6 +15,8 @@ models:
     columns:
       - name: work_center_id
         data_tests: [unique, not_null]
+      - name: hourly_rate_brl
+        data_tests: [not_null]
 
   - name: dim_machine
     columns:
@@ -73,3 +75,34 @@ models:
               arguments:
                 values: [0, 1]
                 quote: false
+      - name: is_overdue
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+  - name: fct_order_margin
+    columns:
+      - name: sales_order_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_order_delivery')
+                field: sales_order_id
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: usd_brl_rate
+        data_tests: [not_null]
+      - name: material_cost_brl
+        data_tests: [not_null]
+      - name: processing_cost_brl
+        data_tests: [not_null]
+      - name: freight_cost_brl
+        data_tests: [not_null]
