@@ -1,0 +1,6 @@
+# Fabric notebooks get `spark` from the runtime, so it is declared as a builtin.
+builtins = ["spark"]
+
+[lint]
+# Real errors only (undefined names, unused imports, syntax), not style.
+select = ["E4", "E7", "E9", "F"]
