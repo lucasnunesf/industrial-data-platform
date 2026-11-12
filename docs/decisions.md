@@ -159,3 +159,28 @@ Short architecture decision records (ADRs), in the order they were made.
 - The pipeline is not fully automatic: without the approval, gold is not rebuilt.
 - The image is large (about 5 GB), mostly because of the Azure CLI.
 - The Airflow metadata is a SQLite file inside the container, so the run history is lost when the container is recreated. A production setup would use PostgreSQL and a scheduler separate from the web server.
+
+## ADR-009: Cost data for margin and freight comes from the ERP
+
+**Status:** accepted
+
+**Context.** The business asks for the real margin of each order and for the freight cost. The ERP had the sales price and the weight of each product, but no material cost, no cost of machine time and no freight. Stage durations in the gold layer are wall-clock differences between events, so they include nights and weekends (ADR-006).
+
+**Decision.**
+- `materials.material_price_usd_per_kg`: material is bought in US dollars.
+- `exchange_rates`: a new mutable table with the daily USD/BRL rate. The values are the real PTAX from Banco Central do Brasil, downloaded once and committed as `simulator/data/ptax_usd_brl.csv`; the simulator loads the rates up to its cut-off date, like a daily import job.
+- `work_centers.hourly_rate_brl`: cost of one hour at each work center.
+- `production_stage_events.work_minutes`: working time reported on each `finish` event, the way a shop-floor report records it.
+- `shipments.freight_cost_brl`: freight of each shipment, simulated from the order weight and the customer state.
+- The extraction gets one more table (`exchange_rates`, by `updated_at`); the new columns need no change, because the Arrow schema is read from the database (ADR-001).
+
+**Alternatives considered.**
+- Deriving working time in the gold layer with a shift calendar: keeps the ERP unchanged, but puts a business rule (shifts, holidays) in SQL and is harder to explain and test.
+- Calling the Banco Central API on every run: always current, but the simulation would depend on an external service and would stop being reproducible.
+
+**Consequences.**
+- The cost of machine time is `work_minutes / 60 × hourly_rate_brl`, with no nights or weekends.
+- PTAX is published on business days only, so the gold layer must use the latest rate on or before the order date.
+- The rate file ends on the day it was downloaded; later simulated days use the last rate until `download_ptax.py` is run again.
+- The schema changed, and `CREATE TABLE IF NOT EXISTS` does not alter an existing table: the ERP database must be recreated (`docker compose down -v`), and bronze files written before this change do not have the new columns.
+- Prices and rates are invented; only the exchange rate is real ([assumptions](assumptions.md)).

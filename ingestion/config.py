@@ -21,6 +21,7 @@ TABLES = [
     Table("sales_order_items", "updated_at", "sales_order_item_id"),
     Table("production_orders", "updated_at", "production_order_id"),
     Table("shipments", "updated_at", "shipment_id"),
+    Table("exchange_rates", "updated_at", "exchange_rate_id"),
     Table("production_stage_events", "created_at", "event_id"),
     Table("quality_inspections", "created_at", "inspection_id"),
 ]

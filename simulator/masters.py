@@ -1,20 +1,25 @@
-"""Variable master data: materials, customers, products, operators."""
+"""Variable master data: materials, customers, products, operators, exchange rates."""
 
+import csv
 import random
+from datetime import date
+from pathlib import Path
 
 from faker import Faker
 
 import factory_config as cfg
 from db import lookup
 
+PTAX_FILE = Path(__file__).parent / "data" / "ptax_usd_brl.csv"
+
 
 def load_materials(conn) -> None:
     conn.cursor().executemany(
-        """INSERT INTO materials (material_code, material_name,
-                                  material_thickness_mm, material_density_g_cm3)
-           VALUES (%s, %s, %s, %s)
+        """INSERT INTO materials (material_code, material_name, material_thickness_mm,
+                                  material_density_g_cm3, material_price_usd_per_kg)
+           VALUES (%s, %s, %s, %s, %s)
            ON CONFLICT (material_code) DO NOTHING""",
-        [m[:4] for m in cfg.MATERIALS],
+        [(*m[:4], m[5]) for m in cfg.MATERIALS],
     )
 
 
@@ -72,8 +77,25 @@ def load_operators(conn) -> None:
     )
 
 
-def load_all(conn) -> None:
+def load_exchange_rates(conn, until: date) -> None:
+    """Load the PTAX rates published up to the cut-off date, like a daily import job."""
+    with PTAX_FILE.open(encoding="utf-8") as f:
+        rows = [
+            ("USD", r["rate_date"], r["buy_rate"], r["sell_rate"])
+            for r in csv.DictReader(f)
+            if date.fromisoformat(r["rate_date"]) <= until
+        ]
+    conn.cursor().executemany(
+        """INSERT INTO exchange_rates (currency_code, rate_date, buy_rate_brl, sell_rate_brl)
+           VALUES (%s, %s, %s, %s)
+           ON CONFLICT (currency_code, rate_date) DO NOTHING""",
+        rows,
+    )
+
+
+def load_all(conn, until: date) -> None:
     load_materials(conn)
     load_customers(conn)
     load_products(conn)
     load_operators(conn)
+    load_exchange_rates(conn, until)

@@ -14,7 +14,7 @@ def main() -> None:
              else datetime.now(production.TZ).replace(tzinfo=None))
 
     with connect() as conn:
-        masters.load_all(conn)
+        masters.load_all(conn, until.date())
         ctx = production.load_context(conn)
         counts = production.write(conn, production.simulate(ctx, until))
 

@@ -1,9 +1,9 @@
-INSERT INTO work_centers (work_center_code, work_center_name) VALUES
-    ('CUT',  'Laser Cutting'),
-    ('WELD', 'Laser Welding'),
-    ('FAB',  'Fabrication'),
-    ('FIN',  'Finishing'),
-    ('QC',   'Quality Control')
+INSERT INTO work_centers (work_center_code, work_center_name, hourly_rate_brl) VALUES
+    ('CUT',  'Laser Cutting',   180),
+    ('WELD', 'Laser Welding',   150),
+    ('FAB',  'Fabrication',      70),
+    ('FIN',  'Finishing',        55),
+    ('QC',   'Quality Control',  60)
 ON CONFLICT (work_center_code) DO NOTHING;
 
 INSERT INTO machines (machine_code, machine_name, work_center_id)

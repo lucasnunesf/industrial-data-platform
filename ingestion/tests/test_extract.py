@@ -29,8 +29,8 @@ def make_production_order(conn: psycopg.Connection) -> tuple[int, int]:
         "VALUES ('Company 001', '00000000000100', 'Sorocaba', 'SP') RETURNING customer_id"
     ).fetchone()[0]
     material = conn.execute(
-        "INSERT INTO materials (material_code, material_name, material_thickness_mm, material_density_g_cm3) "
-        "VALUES ('CS-3', 'Carbon steel 3 mm', 3, 7.85) RETURNING material_id"
+        "INSERT INTO materials (material_code, material_name, material_thickness_mm, material_density_g_cm3, "
+        "material_price_usd_per_kg) VALUES ('CS-3', 'Carbon steel 3 mm', 3, 7.85, 1.70) RETURNING material_id"
     ).fetchone()[0]
     routing, step = conn.execute(
         "SELECT routing_id, routing_step_id FROM routing_steps ORDER BY routing_id, step_sequence LIMIT 1"

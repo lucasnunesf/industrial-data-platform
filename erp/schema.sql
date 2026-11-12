@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS materials (
     material_name       VARCHAR(100) NOT NULL,
     material_thickness_mm  NUMERIC(5,2) NOT NULL,
     material_density_g_cm3    NUMERIC(5,2) NOT NULL,
+    material_price_usd_per_kg NUMERIC(8,2) NOT NULL CHECK (material_price_usd_per_kg > 0),
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS work_centers (
     work_center_id   INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     work_center_code VARCHAR(20)  NOT NULL UNIQUE,
     work_center_name VARCHAR(100) NOT NULL,
+    hourly_rate_brl  NUMERIC(8,2) NOT NULL CHECK (hourly_rate_brl >= 0),
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -119,6 +121,7 @@ CREATE TABLE IF NOT EXISTS production_stage_events (
     operator_id          INTEGER     REFERENCES operators (operator_id),
     good_quantity        INTEGER     CHECK (good_quantity >= 0),
     scrap_quantity       INTEGER     CHECK (scrap_quantity >= 0),
+    work_minutes         NUMERIC(8,1) CHECK (work_minutes >= 0),
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (production_order_id, routing_step_id, event_type)
 );
@@ -152,6 +155,7 @@ CREATE TABLE IF NOT EXISTS shipments (
     delivered_at         TIMESTAMPTZ,
     shipment_status      VARCHAR(20) NOT NULL DEFAULT 'shipped'
                          CHECK (shipment_status IN ('shipped', 'delivered', 'returned')),
+    freight_cost_brl     NUMERIC(10,2) NOT NULL CHECK (freight_cost_brl >= 0),
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (delivered_at >= shipped_at)
@@ -159,6 +163,18 @@ CREATE TABLE IF NOT EXISTS shipments (
 
 CREATE INDEX IF NOT EXISTS ix_shipments_sales_order
     ON shipments (sales_order_id);
+
+-- Daily exchange rate to BRL (PTAX, Banco Central do Brasil). Business days only.
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    exchange_rate_id  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    currency_code     CHAR(3)       NOT NULL,
+    rate_date         DATE          NOT NULL,
+    buy_rate_brl      NUMERIC(10,4) NOT NULL CHECK (buy_rate_brl > 0),
+    sell_rate_brl     NUMERIC(10,4) NOT NULL CHECK (sell_rate_brl > 0),
+    created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    UNIQUE (currency_code, rate_date)
+);
 
     
 CREATE OR REPLACE FUNCTION set_updated_at()
