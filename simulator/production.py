@@ -129,28 +129,34 @@ def simulate(ctx: dict, until: datetime) -> dict:
                 due = max(promised - timedelta(days=1), released_at.date())
                 ready = released_at
                 first_start = None
+                units = qty  # units entering the next stage: the good output of the previous one
 
                 for step_id, wc in ctx["steps"][routing]:
                     k = min(range(len(free_at[wc])), key=lambda i: free_at[wc][i])
                     start = to_work(max(ready, free_at[wc][k]))
-                    minutes = (cfg.SETUP_MINUTES[wc] + qty * cfg.MINUTES_PER_UNIT[wc]
+                    minutes = (cfg.SETUP_MINUTES[wc] + units * cfg.MINUTES_PER_UNIT[wc]
                                * (0.5 + weight / 10) * rng.lognormvariate(0, 0.25))
                     finish = add_work(start, minutes)
                     free_at[wc][k] = finish
-                    scrap = sum(rng.random() < cfg.SCRAP_RATE[wc] for _ in range(qty))
+                    # One draw per planned unit keeps the random sequence, and so the rest of the
+                    # history, unchanged; only the units that reached this stage can be scrapped.
+                    draws = [rng.random() for _ in range(qty)]
+                    scrap = sum(d < cfg.SCRAP_RATE[wc] for d in draws[:units])
                     machine, operator = resources[wc][k]
                     if wc == "WELD":
                         operator = rng.choice(ctx["operators"]["welder"])
                     out["events"].append((po_number, step_id, "start", start, machine, operator, None, None))
-                    out["events"].append((po_number, step_id, "finish", finish, machine, operator, qty - scrap, scrap))
+                    out["events"].append((po_number, step_id, "finish", finish, machine, operator, units - scrap, scrap))
                     first_start = first_start or start
                     ready = finish
+                    units -= scrap
 
                 last_finish = ready
                 if rng.random() < cfg.INSPECTION_RATE:
                     inspected_at = add_work(ready, rng.uniform(30, 240))
-                    sample = max(1, round(qty * 0.2))
-                    rejected = sum(rng.random() < 0.04 for _ in range(sample))
+                    sample = max(1, round(units * 0.2))
+                    draws = [rng.random() for _ in range(max(1, round(qty * 0.2)))]
+                    rejected = sum(d < 0.04 for d in draws[:sample])
                     result = "approved" if rejected == 0 else ("rework" if rejected <= 2 else "rejected")
                     out["inspections"].append((po_number, inspector, inspected_at, sample, rejected, result))
                     ready = inspected_at

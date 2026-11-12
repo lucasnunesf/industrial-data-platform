@@ -29,6 +29,7 @@ The production flow is based on the real operation of AC Metais. All numbers bel
 - Processing time per stage = setup + units × minutes per unit, scaled by part weight, with random variation.
 - Parallel capacity: CUT 2, WELD 1, FAB 10, FIN 5 jobs at a time.
 - Scrap rates: CUT 3%, WELD 1%, FAB 1.5%, FIN 0.5%.
+- Scrap propagates: each stage receives only the good output of the previous one, and its processing time is based on those units.
 - Quality inspects about 20% of production orders by sampling 20% of the units.
 - Material prices (BRL/kg): carbon steel 9, stainless steel 32, aluminum 38.
 
