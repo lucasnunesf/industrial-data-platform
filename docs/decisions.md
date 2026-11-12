@@ -14,6 +14,7 @@ Short architecture decision records (ADRs), in the order they were made.
 - All tables are read in one `REPEATABLE READ`, read-only transaction, so they share a single consistent snapshot. The upper bound of each window is the database `now()` taken at the start of the run.
 - The Arrow schema is derived from `information_schema.columns`, so decimal precision matches the source exactly.
 - Each row gets `_extracted_at` and `_batch_id`. Files are written as `erp/<table>/ingestion_date=YYYY-MM-DD/<table>_<run_id>.parquet`, and state is stored in `_state/watermarks.json`.
+- The run id is the run start in UTC with microseconds, and an existing bronze file is never overwritten: the run fails instead. A run id with one-second resolution let two runs in the same second write the same file name, and the second one replaced the first.
 - Bronze is append-only. The state is saved after each table, so delivery is at-least-once.
 
 **Consequences.**

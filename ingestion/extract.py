@@ -56,6 +56,11 @@ def table_schema(conn: psycopg.Connection, table_name: str) -> pa.Schema:
     return pa.schema([(name, arrow_type(dtype, prec, scale)) for name, dtype, prec, scale in rows])
 
 
+def make_run_id(started_at: datetime) -> str:
+    """Run id with microseconds, so two runs in the same second get different file names."""
+    return started_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+
+
 def load_state(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -103,6 +108,8 @@ def extract_table(
         dest = out_dir / "erp" / table.name / f"ingestion_date={day}"
         dest.mkdir(parents=True, exist_ok=True)
         final = dest / f"{table.name}_{run_id}.parquet"
+        if final.exists():
+            raise FileExistsError(f"{final} already exists; bronze files are never overwritten")
         tmp = final.with_name(final.name + ".tmp")
         pq.write_table(data, tmp, compression="snappy")
         tmp.replace(final)
@@ -128,7 +135,7 @@ def main() -> None:
         conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
         conn.read_only = True
         started_at = conn.execute("SELECT now()").fetchone()[0]
-        run_id = started_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        run_id = make_run_id(started_at)
         print(f"run {run_id} -> {out_dir}")
 
         for table in TABLES:

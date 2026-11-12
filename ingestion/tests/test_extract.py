@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg
 import pyarrow.parquet as pq
+import pytest
 
 import extract
 from config import TABLES
@@ -95,3 +97,20 @@ def test_event_committed_out_of_order_is_not_lost(erp_db, tmp_path):
 
     after = run_extraction(erp_db, "production_stage_events", state, tmp_path / "run2")
     assert slow_id in [r["event_id"] for r in after]
+
+
+def test_run_ids_within_the_same_second_are_unique():
+    started_at = datetime(2026, 11, 12, 10, 0, 0, 100, tzinfo=timezone.utc)
+    assert extract.make_run_id(started_at) != extract.make_run_id(started_at + timedelta(microseconds=1))
+
+
+def test_a_file_from_another_run_is_never_overwritten(erp_db, tmp_path):
+    with psycopg.connect(autocommit=True, **erp_db) as conn:
+        conn.execute(
+            "INSERT INTO customers (company_name, cnpj, city, state) "
+            "VALUES ('Company 001', '00000000000100', 'Sorocaba', 'SP')"
+        )
+        started_at = conn.execute("SELECT now()").fetchone()[0]
+        extract.extract_table(conn, TABLE["customers"], {}, started_at, "same-run", tmp_path)
+        with pytest.raises(FileExistsError):
+            extract.extract_table(conn, TABLE["customers"], {}, started_at, "same-run", tmp_path)
