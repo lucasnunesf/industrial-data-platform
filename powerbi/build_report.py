@@ -28,7 +28,7 @@ PAGE2 = "55281a6a74630230f723"
 PAGE3 = "7d3e1b9a5c2f48a6e0b4"
 
 NAVY, BLUE, ORANGE = "#0B2545", "#1F6FB2", "#F2A93B"
-SOFT, CANVAS, LINE, MUTED, WHITE = "#C9DCF0", "#EEF2F7", "#D9E2EC", "#627D98", "#FFFFFF"
+SOFT, CANVAS, LINE, MUTED, WHITE = "#C9DCF0", "#F6F7F9", "#E1E5EA", "#627D98", "#FFFFFF"
 
 THEME = {
     "name": "AC Metais Navy",
@@ -212,7 +212,7 @@ def slicer(label, entity, prop, x, w, order, title):
 
 S, D, M = "fct_stage_execution", "fct_order_delivery", "fct_order_margin"
 SUB = "AC Metais · synthetic data · July to November 2026"
-ROW2_Y, ROW2_H, ROW3_Y, ROW3_H = 255, 400, 675, 390
+ROW2_Y, ROW2_H, ROW3_Y, ROW3_H = 255, 400, 675, 355
 
 top10_customers = {
     "name": "top10latecustomers",
@@ -264,22 +264,22 @@ page1 += kpis("p1", [
 ])
 page1 += [
     visual("p1-hero-wait", "clusteredBarChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="Wait by stage (h) · bottleneck",
+           title="Where do orders wait? Average wait before each stage (h)",
            objects=measure_colored_bars(S, "Wait Color"), sort=msr_field(S, "Avg Wait (h)"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Avg Wait (h)", "Avg wait (h)")]}),
-    visual("p1-duration", "clusteredColumnChart", 1220, ROW2_Y, 680, ROW2_H, 31,
-           title="Duration by stage (h)",
+    visual("p1-duration", "clusteredBarChart", 1220, ROW2_Y, 680, ROW2_H, 31,
+           title="How long does each stage take? (h)",
            objects=solid_bars(NAVY), sort=msr_field(S, "Avg Duration (h)"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Avg Duration (h)", "Avg duration (h)")]}),
-    visual("p1-scrap", "clusteredColumnChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Scrap by stage",
-           objects=solid_bars(ORANGE), sort=msr_field(S, "Scrap %"), roles={
+    visual("p1-scrap", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
+           title="Scrap rate by stage",
+           objects=solid_bars(BLUE), sort=msr_field(S, "Scrap %"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Scrap %", "Scrap rate")]}),
     visual("p1-table-product", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Products by wait",
+           title="Products with the longest wait",
            sort=msr_field(S, "Avg Wait (h)"), roles={
                "Values": [column("dim_product", "product_name", "Product"),
                           column("dim_product", "routing_name", "Routing"),
@@ -302,23 +302,23 @@ page2 += kpis("p2", [
 ])
 page2 += [
     visual("p2-hero-month", "clusteredColumnChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="On time vs late · by month",
+           title="On-time and late orders by order month",
            objects={"labels": labels_on(), "valueAxis": HIDE_VALUE_AXIS,
                     "legend": [{"properties": {"show": lit("true"), "position": lit("'Top'")}}]},
            roles={"Category": [month(D, "order_date")],
                   "Y": [measure(D, "On-Time Orders", "On time"), measure(D, "Late Orders", "Late")]}),
     visual("p2-donut", "donutChart", 1220, ROW2_Y, 680, ROW2_H, 31,
-           title="On time vs late",
+           title="Share of orders on time",
            objects={"labels": labels_on(labelStyle=lit("'Category, percent of total'")),
                     "legend": [{"properties": {"show": lit("false")}}]},
            roles={"Y": [measure(D, "On-Time Orders", "On time"), measure(D, "Late Orders", "Late")]}),
     visual("p2-top-customers", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Top 10 late customers",
+           title="Customers with the most late orders",
            objects=solid_bars(NAVY), sort=msr_field(D, "Late Orders"), filters=[top10_customers], roles={
                "Category": [column("dim_customer", "company_name")],
                "Y": [measure(D, "Late Orders", "Late orders")]}),
     visual("p2-table-late", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Late orders",
+           title="Late orders, most days late first",
            sort=col_field(D, "days_late"), filters=[only_late], roles={
                "Values": [column(D, "sales_order_number", "Order"),
                           column("dim_customer", "company_name", "Customer"),
@@ -341,7 +341,7 @@ page3 += kpis("p3", [
 ])
 page3 += [
     visual("p3-hero-month", "clusteredColumnChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="Contribution margin by order month · shipped orders",
+           title="Contribution margin by order month",
            objects=solid_bars(NAVY), sort=col_field(M, "order_month"), sort_dir="Ascending",
            roles={"Category": [column(M, "order_month", "Month")],
                   "Y": [measure(M, "Margin %", "Margin")]}),
@@ -354,12 +354,12 @@ page3 += [
                         measure(M, "Freight Cost (BRL)", "Freight"),
                         measure(M, "Margin (BRL)", "Margin")]}),
     visual("p3-state", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Freight share of revenue by state",
-           objects=solid_bars(ORANGE), sort=msr_field(M, "Freight % of Revenue"), roles={
+           title="Freight as a share of revenue, by customer state",
+           objects=solid_bars(BLUE), sort=msr_field(M, "Freight % of Revenue"), roles={
                "Category": [column("dim_customer", "state")],
                "Y": [measure(M, "Freight % of Revenue", "Freight / revenue")]}),
     visual("p3-table-orders", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Orders by revenue",
+           title="Largest orders: revenue and margin",
            sort=msr_field(M, "Revenue (BRL)"), roles={
                "Values": [column(M, "sales_order_number", "Order"),
                           column("dim_customer", "company_name", "Customer"),
@@ -368,6 +368,25 @@ page3 += [
            objects=table_style({f"{M}.sales_order_number": 170, "dim_customer.company_name": 250,
                                 f"{M}.Revenue (BRL)": 220, f"{M}.Margin (BRL)": 220, f"{M}.Margin %": 160})),
 ]
+
+
+def footnote(prefix, note):
+    """One line of small print at the bottom of the page: how to read the numbers."""
+    return [visual(f"{prefix}-note", "textbox", 20, 1040, 1880, 32, 90, objects={
+        "general": [{"properties": {"paragraphs": [
+            {"textRuns": [{"value": note, "textStyle": {"fontSize": "10pt", "color": MUTED}}],
+             "horizontalTextAlignment": "left"}]}}]}, container={
+        "background": [{"properties": {"show": lit("false")}}],
+        "border": [{"properties": {"show": lit("false")}}],
+        "dropShadow": [{"properties": {"show": lit("false")}}],
+    })]
+
+
+page1 += footnote("p1", "Wait and duration are wall-clock hours, so they include nights and weekends. "
+                        "Laser cutting is the first stage and has no wait.")
+page2 += footnote("p2", "Late = delivered after the promised date, or past the promised date and not delivered yet.")
+page3 += footnote("p3", "Margin = revenue - material - processing - freight, for shipped orders. "
+                        "Prices and rates are simulated; the USD/BRL rate is the real PTAX.")
 
 
 def write_page(page_id, display_name, visuals):
