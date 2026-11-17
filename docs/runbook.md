@@ -2,6 +2,25 @@
 
 Routine tasks and known failure modes of the pipeline.
 
+## Run the full pipeline
+
+`orchestration/run_pipeline.ps1` chains the steps below and pauses for the manual silver run in Fabric.
+
+1. **Source and bronze:** the local steps of the README quick start.
+2. **Upload to the lake** (requires `az login` on the Azure subscription and `pip install -r ingestion/requirements-upload.txt`): `python ingestion/upload.py --account <storage account>`.
+3. **Silver (Fabric):** the Lakehouse reads `bronze/erp_v2` through a OneLake shortcut under `Files` ([ADR-004](decisions.md)). Paste the code of `processing/silver/` into two notebooks, attach the Lakehouse as the default one and run `01_build_silver`, then `02_test_silver` (it must end with 0 failed).
+4. **Gold (dbt)** (requires `pip install dbt-fabric` on Python 3.12 and `az login --allow-no-subscriptions` with the Fabric account): set `FABRIC_SQL_HOST` to the Warehouse SQL endpoint and run `dbt build --project-dir dbt --profiles-dir dbt`.
+5. **Power BI:** refresh the semantic model and publish. `python powerbi/build_report.py "<name>.Report"` regenerates the pages; close Power BI Desktop first.
+
+**Airflow (optional).** The same steps as a DAG. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST`, run `docker compose -f orchestration/airflow/docker-compose.yml up -d --build` (the image is about 5 GB), log in once per tenant inside the container, then trigger `industrial_pipeline` at http://localhost:8080:
+
+```powershell
+docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/lake airflow az login --use-device-code
+docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/fabric airflow az login --use-device-code --allow-no-subscriptions
+```
+
+The DAG stops at `wait_for_silver` until the notebooks have run and the task is approved in the UI ([ADR-008](decisions.md)).
+
 ## Renew the SAS token of the OneLake shortcut
 
 The shortcut `Files/erp_v2` in the Fabric Lakehouse reads `bronze/erp_v2` with a read-only SAS token ([ADR-004](decisions.md)). When it expires, reads from the shortcut fail with an authorization error and the silver notebooks stop working.
@@ -29,6 +48,10 @@ The token is kept only in the Fabric connection, never in the repository.
 
 The notebook has no default Lakehouse. Attach the Lakehouse (the item with the house icon, not the SQL analytics endpoint) as the default and restart the session.
 
+## Notebook fails with `PATH_NOT_FOUND` on a new shortcut
+
+Check that the shortcut was created under **Files**, not under **Tables**: under Tables, Fabric tries to read the folders as tables and shows them as *Unidentified*. The notebooks read the shortcut by its full path, taken from `mssparkutils.fs.ls("Files")`; with the short relative path, a shortcut created while a session was open was not found.
+
 ## Notebook fails with `TooManyRequestsForCapacity`
 
 The trial capacity allows few concurrent Spark sessions. Stop the sessions of other notebooks (or cancel running items in the Monitor hub), wait a minute and run again.
@@ -38,6 +61,10 @@ The trial capacity allows few concurrent Spark sessions. Stop the sessions of ot
 - Check that `FABRIC_SQL_HOST` is set in the current terminal.
 - Check that the Azure CLI session belongs to the account that owns the Fabric workspace (`az account show`). If it differs from the Azure account of the lake, use a separate folder with `AZURE_CONFIG_DIR`.
 - Run `dbt debug --project-dir dbt --profiles-dir dbt` to see the failing step.
+
+## dbt fails with `deadlocked on lock resources`
+
+The Warehouse can deadlock when several views are created at the same time. The profile uses one thread (`threads: 1` in `dbt/profiles.yml`); a full build takes under a minute.
 
 ## Microsoft Fabric trial
 

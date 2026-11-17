@@ -14,7 +14,7 @@
 
 End-to-end data engineering platform on **Azure** and **Microsoft Fabric** for metal fabrication plants, built around a real case: **AC Metais**, a Brazilian laser cutting and boilermaking company.
 
-> ✅ **MVP complete:** batch lakehouse and dashboard, with order margin, freight, CI and a local Airflow DAG. Next: laser streaming — see the [Roadmap](#roadmap).
+> ✅ **Complete:** batch lakehouse on Azure and Microsoft Fabric, dbt star schema with tests, a three-page Power BI report, CI and a local Airflow DAG. See [what was built](#what-was-built).
 
 ## The problem
 
@@ -40,12 +40,10 @@ Questions the business asks every day, and that are hard to answer without a dat
 
 A cloud data platform that extracts data from the plant's ERP, organizes it in a lakehouse with bronze, silver and gold layers, and turns it into decisions for production planning.
 
-![Architecture overview: medallion layers on Azure and Microsoft Fabric](docs/images/architecture-overview.jpg)
-
 ![Architecture: batch lakehouse on Azure and Microsoft Fabric](docs/images/architecture.png)
 
 <details>
-<summary><b>Technical architecture</b> (solid = built, dashed = planned)</summary>
+<summary><b>Technical architecture</b></summary>
 
 ```mermaid
 flowchart LR
@@ -54,8 +52,6 @@ flowchart LR
     C -->|OneLake shortcut| E[Fabric notebooks<br/>PySpark silver]
     E -->|dbt models + tests| F[Gold layer<br/>Fabric Warehouse]
     F --> G[Power BI]
-    A -.machine telemetry.-> B[Azure Event Hubs]
-    B -.-> C
     H[Apache Airflow] -->|orchestrates| P
     H -->|manual approval| E
     H -->|orchestrates| F
@@ -77,15 +73,13 @@ Each step and its trade-offs are recorded in [docs/decisions.md](docs/decisions.
 
 ## Dashboard
 
-![Key findings: bottleneck, on-time delivery and scrap](docs/images/results-overview.jpg)
-
 ![Dashboard demo](docs/images/dashboard-demo.gif)
 
-| Production bottlenecks | On-time delivery |
-|---|---|
-| ![Production bottlenecks page](docs/images/dashboard-production.png) | ![On-time delivery page](docs/images/dashboard-delivery.png) |
+| Production bottlenecks | On-time delivery | Order margin |
+|---|---|---|
+| ![Production bottlenecks page](docs/images/dashboard-production.png) | ![On-time delivery page](docs/images/dashboard-delivery.png) | ![Order margin page](docs/images/dashboard-margin.png) |
 
-Power BI on top of the gold layer. Orders wait the longest before laser welding and finishing, and 82% of the orders were on time, with a dip in September; an order past its promised date and not yet delivered counts as late. Shipped orders keep about half of their revenue after material, processing and freight. The report pages are generated as code; see [powerbi/](powerbi/).
+Power BI on top of the gold layer. Orders wait the longest before laser welding (9 hours on average) and finishing, and 82% of the orders were on time, with a dip in September; an order past its promised date and not yet delivered counts as late. Shipped orders keep about half of their revenue after material, processing and freight. The report pages are generated as code; see [powerbi/](powerbi/).
 
 ## Data model
 
@@ -104,7 +98,6 @@ The gold layer is a star schema with three facts at different grains, sharing th
 | Module | Business question | Status |
 |---|---|---|
 | **Production planning (PCP)** | Bottlenecks, lead time per stage, late orders | ✅ data model ready |
-| **Laser machines** | Uptime, OEE, sheet metal yield and scrap | planned (streaming) |
 | **Finance** | Real margin per order | ✅ data model ready |
 | **Logistics** | On-time delivery, freight cost | ✅ data model ready |
 
@@ -120,9 +113,7 @@ The gold layer is a star schema with three facts at different grains, sharing th
 | Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |
 | Infrastructure as code | Terraform (data lake, Key Vault) | ✅ |
 | Visualization | Power BI (report pages generated as code, PBIR) | ✅ |
-| Streaming | Azure Event Hubs | planned |
-| Orchestration (MVP) | PowerShell script, `orchestration/run_pipeline.ps1` | ✅ |
-| Orchestration | Apache Airflow 3 (local, Docker), `orchestration/airflow/` | ✅ |
+| Orchestration | PowerShell script (end to end) and an Apache Airflow 3 DAG (local, Docker) | ✅ |
 | CI | GitHub Actions (pytest, ruff, Terraform validate, dbt parse) | ✅ |
 
 ## Repository structure
@@ -137,14 +128,11 @@ powerbi/         Dashboard measures (DAX), layout and report generator
 infra/           Terraform
 docs/            Assumptions, technical decisions and images
 orchestration/   Pipeline runner script and local Airflow (DAG, image, compose)
-tests/           Reserved for cross-project tests (extraction tests live in ingestion/tests)
 ```
 
 ## Quick start
 
-Requirements: Docker Desktop. The cloud steps also need an Azure subscription (Terraform in `infra/`) and a Microsoft Fabric workspace with a Lakehouse and a Warehouse.
-
-**1. Source and bronze (local)**
+Requirements: Docker Desktop. This runs the source and the bronze extraction locally:
 
 ```bash
 cp .env.example .env                        # then set your own password
@@ -153,67 +141,32 @@ docker compose run --rm --build simulator   # simulate the plant from 2026-07-01
 docker compose run --rm --build extractor   # extract what changed into Parquet (ingestion/out/bronze)
 ```
 
-**2. Upload to the data lake** (requires `az login` and `pip install -r ingestion/requirements-upload.txt`):
+The simulator is deterministic and incremental: running it again only adds what happened since the last run, like a live ERP. The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are in [docs/assumptions.md](docs/assumptions.md).
 
-```bash
-python ingestion/upload.py --account <storage account name>
-```
-
-**3. Silver (Fabric).** The Lakehouse reads `bronze/erp_v2` through a OneLake shortcut ([ADR-004](docs/decisions.md)). Import the notebooks from `processing/silver/`, attach the Lakehouse as the default one and run `01_build_silver` then `02_test_silver`.
-
-**4. Gold (dbt).** Requires `pip install dbt-fabric` (Python 3.12) and the Warehouse SQL endpoint:
-
-```powershell
-$env:FABRIC_SQL_HOST = "<warehouse>.datawarehouse.fabric.microsoft.com"
-az login --allow-no-subscriptions     # the account that owns the Fabric workspace
-dbt build --project-dir dbt --profiles-dir dbt
-```
-
-`orchestration/run_pipeline.ps1` chains all four steps and pauses for the manual silver run in Fabric.
-
-**Airflow (optional).** The same pipeline as a DAG, with logs, retries and history per step. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST` first:
-
-```powershell
-docker compose up -d erp-db
-docker compose -f orchestration/airflow/docker-compose.yml up -d --build    # the image is about 5 GB
-```
-
-Open http://localhost:8080 and trigger `industrial_pipeline`. The upload and dbt tasks take their token from the Azure CLI inside the container, so log in once per tenant (the logins are kept in a Docker volume):
-
-```powershell
-docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/lake airflow az login --use-device-code
-docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/fabric airflow az login --use-device-code --allow-no-subscriptions
-```
-
-The DAG stops at `wait_for_silver` until someone runs the notebooks in Fabric and approves the task in the Airflow UI ([ADR-008](docs/decisions.md)).
-
-The simulator is deterministic and incremental: running it again only adds what happened since the last run and updates the status of open orders — like a live ERP. Use `--until "2026-11-03 12:00"` to stop at a given time.
-
-The ERP is available at `localhost:5433` (database `erp`) for any SQL client. Simulation assumptions are documented in [docs/assumptions.md](docs/assumptions.md).
+The cloud steps (upload to the lake, silver in Fabric, dbt, Airflow) need an Azure subscription and a Microsoft Fabric workspace; they are in the [runbook](docs/runbook.md#run-the-full-pipeline).
 
 ## Design notes and limitations
 
 - **Silver is rebuilt in full on every run.** It is simple and idempotent at this volume ([ADR-005](docs/decisions.md)).
 - **`wait_minutes` and `duration_minutes` are wall-clock times**, so both include nights and weekends: the simulated plant runs one shift from Monday to Friday. They compare stages with each other but are not idle time or machine time ([ADR-006](docs/decisions.md)). Costs use `work_minutes`, the working time reported by the shop floor.
 - **The first stage of a routing has no wait**, because wait is measured from the end of the previous stage.
-- **Airflow does not run the silver notebooks.** The Fabric workspace is in another tenant and is reached with a personal account, so the DAG waits for a manual approval at that step, and it is triggered by hand instead of on a schedule ([ADR-008](docs/decisions.md)).
+- **The PowerShell script is the tested end-to-end path.** The Airflow DAG runs the same steps; it was tested up to the extraction. It does not run the silver notebooks: the Fabric workspace is in another tenant, so the DAG waits for a manual approval at that step ([ADR-008](docs/decisions.md)).
 - **Key Vault is provisioned but not used yet.** Fabric reads the lake with a SAS token kept in the Fabric connection, because the workspace and the Azure subscription belong to different tenants.
 - **The SAS token expires** and must be renewed; see the [runbook](docs/runbook.md).
-- **CI checks the code, not the data in the cloud.** On every pull request, GitHub Actions runs `ingestion/tests` (pytest, against a throwaway PostgreSQL database; covers the incremental extraction, including rows committed late), ruff, `terraform validate` and `dbt parse`. It does not connect to Azure or Fabric, so the silver checks and the dbt tests run in the pipeline, not in CI ([ADR-007](docs/decisions.md)).
+- **CI checks the code, not the data in the cloud.** On every pull request, GitHub Actions runs the Python tests (pytest; the extraction tests use a throwaway PostgreSQL database and cover rows committed late), ruff, `terraform validate` and `dbt parse`. It does not connect to Azure or Fabric, so the silver checks and the dbt tests run in the pipeline, not in CI ([ADR-007](docs/decisions.md)).
 - **Margin is a contribution margin, on simulated prices.** It is revenue minus material, processing and freight, and leaves out taxes, overhead and rework. Material prices, hourly rates and freight rates are invented; only the USD/BRL rate is real (PTAX, Banco Central do Brasil) ([ADR-009, ADR-010](docs/decisions.md)).
 - **The exchange rate file is a snapshot.** It ends on the day it was downloaded; later days use the last rate until `simulator/download_ptax.py` is run again.
 
-## Roadmap
+## What was built
 
-- [x] **Phase 0 — Foundations:** local environment, Git, Docker, project structure
-- [x] **Phase 1 — ERP & plant simulator:** PostgreSQL ERP schema and Python simulator generating orders, production orders and stage events
-- [x] **Phase 2 — Batch lakehouse:** incremental extraction to Parquet, ADLS Gen2 bronze with Terraform, silver in Microsoft Fabric with data quality checks
-- [x] **Phase 3 — PCP modeling:** dbt star schema for lead time, bottlenecks and on-time delivery, with tests
-- [x] **MVP:** Power BI dashboard for bottlenecks and on-time delivery
-- [ ] **Phase 4 — Laser streaming:** real-time machine telemetry, OEE and scrap
-- [x] **Phase 5 — Automation:** CI on GitHub Actions and a local Airflow DAG
-- [x] **Phase 6 — Finance & logistics:** margin per order and freight cost
-- [ ] **Phase 7 — Showcase:** final dashboards, documentation and demo video
+1. **ERP and plant simulator:** PostgreSQL schema and a Python simulator for orders, production and shipping.
+2. **Batch lakehouse:** incremental extraction to Parquet, ADLS Gen2 bronze with Terraform, silver in Microsoft Fabric with 88 data quality checks.
+3. **Gold layer:** dbt star schema for bottlenecks, on-time delivery and margin, with 34 tests.
+4. **Power BI:** three report pages generated as code.
+5. **Finance and logistics:** material cost with the real USD/BRL rate, machine time and freight per order.
+6. **Automation:** CI on GitHub Actions and a local Airflow DAG.
+
+**Out of scope:** real-time telemetry of the laser cutters (streaming, OEE). It would reuse the same ERP events and was left out to keep the project focused on the batch platform.
 
 ## About the data
 

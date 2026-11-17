@@ -7,4 +7,4 @@ industrial:
       database: wh_industrial
       schema: dbo
       authentication: CLI
-      threads: 4
+      threads: 1  # parallel view creation deadlocked on the Warehouse
