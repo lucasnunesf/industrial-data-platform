@@ -211,8 +211,8 @@ def slicer(label, entity, prop, x, w, order, title):
 
 
 S, D, M = "fct_stage_execution", "fct_order_delivery", "fct_order_margin"
-SUB = "AC Metais · synthetic data · July to November 2026"
-ROW2_Y, ROW2_H, ROW3_Y, ROW3_H = 255, 400, 675, 355
+SUB = "AC Metais · synthetic data"
+ROW2_Y, ROW2_H, ROW3_Y, ROW3_H = 255, 400, 675, 390
 
 top10_customers = {
     "name": "top10latecustomers",
@@ -368,25 +368,6 @@ page3 += [
            objects=table_style({f"{M}.sales_order_number": 170, "dim_customer.company_name": 250,
                                 f"{M}.Revenue (BRL)": 220, f"{M}.Margin (BRL)": 220, f"{M}.Margin %": 160})),
 ]
-
-
-def footnote(prefix, note):
-    """One line of small print at the bottom of the page: how to read the numbers."""
-    return [visual(f"{prefix}-note", "textbox", 20, 1040, 1880, 32, 90, objects={
-        "general": [{"properties": {"paragraphs": [
-            {"textRuns": [{"value": note, "textStyle": {"fontSize": "10pt", "color": MUTED}}],
-             "horizontalTextAlignment": "left"}]}}]}, container={
-        "background": [{"properties": {"show": lit("false")}}],
-        "border": [{"properties": {"show": lit("false")}}],
-        "dropShadow": [{"properties": {"show": lit("false")}}],
-    })]
-
-
-page1 += footnote("p1", "Wait and duration are wall-clock hours, so they include nights and weekends. "
-                        "Laser cutting is the first stage and has no wait.")
-page2 += footnote("p2", "Late = delivered after the promised date, or past the promised date and not delivered yet.")
-page3 += footnote("p3", "Margin = revenue - material - processing - freight, for shipped orders. "
-                        "Prices and rates are simulated; the USD/BRL rate is the real PTAX.")
 
 
 def write_page(page_id, display_name, visuals):
