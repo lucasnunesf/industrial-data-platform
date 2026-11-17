@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 import pytest
 
 import extract
-from config import TABLES
+from config import SOURCE_FOLDER, TABLES
 
 TABLE = {t.name: t for t in TABLES}
 
@@ -18,7 +18,7 @@ def run_extraction(params: dict, table_name: str, state: dict, out_dir: Path) ->
         conn.read_only = True
         started_at = conn.execute("SELECT now()").fetchone()[0]
         extract.extract_table(conn, TABLE[table_name], state, started_at, "test", out_dir)
-    files = sorted((out_dir / "erp" / table_name).rglob("*.parquet"))
+    files = sorted((out_dir / SOURCE_FOLDER / table_name).rglob("*.parquet"))
     return [row for f in files for row in pq.read_table(f).to_pylist()]
 
 

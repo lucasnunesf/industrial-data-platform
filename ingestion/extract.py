@@ -17,7 +17,7 @@ import psycopg
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from config import TABLES, Table
+from config import SOURCE_FOLDER, TABLES, Table
 from db import connect
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -105,7 +105,7 @@ def extract_table(
         data = data.append_column("_batch_id", pa.array([run_id] * len(rows), type=pa.string()))
 
         day = started_at.astimezone(timezone.utc).date().isoformat()
-        dest = out_dir / "erp" / table.name / f"ingestion_date={day}"
+        dest = out_dir / SOURCE_FOLDER / table.name / f"ingestion_date={day}"
         dest.mkdir(parents=True, exist_ok=True)
         final = dest / f"{table.name}_{run_id}.parquet"
         if final.exists():

@@ -1,5 +1,5 @@
-# Fabric notebooks get `spark` from the runtime, so it is declared as a builtin.
-builtins = ["spark"]
+# Fabric notebooks get `spark` and `mssparkutils` from the runtime, so they are declared as builtins.
+builtins = ["spark", "mssparkutils"]
 
 [lint]
 # Real errors only (undefined names, unused imports, syntax), not style.

@@ -28,7 +28,7 @@ PAGE2 = "55281a6a74630230f723"
 PAGE3 = "7d3e1b9a5c2f48a6e0b4"
 
 NAVY, BLUE, ORANGE = "#0B2545", "#1F6FB2", "#F2A93B"
-SOFT, CANVAS, LINE, MUTED, WHITE = "#C9DCF0", "#EEF2F7", "#D9E2EC", "#627D98", "#FFFFFF"
+SOFT, CANVAS, LINE, MUTED, WHITE = "#C9DCF0", "#F6F7F9", "#E1E5EA", "#627D98", "#FFFFFF"
 
 THEME = {
     "name": "AC Metais Navy",
@@ -39,12 +39,11 @@ THEME = {
     "visualStyles": {
         "*": {"*": {
             "background": [{"show": True, "color": {"solid": {"color": WHITE}}, "transparency": 0}],
-            "border": [{"show": True, "color": {"solid": {"color": LINE}}, "radius": 14}],
-            "dropShadow": [{"show": True, "color": {"solid": {"color": NAVY}}, "position": "Outer",
-                            "preset": "BottomRight", "transparency": 82}],
-            "title": [{"show": True, "fontColor": {"solid": {"color": NAVY}}, "fontSize": 14,
-                       "fontFamily": "Segoe UI Semibold"}],
-            "labels": [{"color": {"solid": {"color": NAVY}}, "fontSize": 11}],
+            "border": [{"show": True, "color": {"solid": {"color": LINE}}, "radius": 4}],
+            "dropShadow": [{"show": False}],
+            "title": [{"show": True, "fontColor": {"solid": {"color": NAVY}}, "fontSize": 12,
+                       "fontFamily": "Segoe UI Semibold", "alignment": "left"}],
+            "labels": [{"color": {"solid": {"color": NAVY}}, "fontSize": 10}],
             "categoryAxis": [{"labelColor": {"solid": {"color": MUTED}}, "fontSize": 11}],
             "valueAxis": [{"labelColor": {"solid": {"color": MUTED}}, "fontSize": 10, "gridlineStyle": "dotted"}],
             "legend": [{"labelColor": {"solid": {"color": NAVY}}, "fontSize": 11}],
@@ -54,10 +53,10 @@ THEME = {
             "outspace": [{"color": {"solid": {"color": CANVAS}}, "transparency": 0}],
         }},
         "card": {"*": {
-            "background": [{"show": True, "color": {"solid": {"color": NAVY}}, "transparency": 0}],
-            "border": [{"show": True, "color": {"solid": {"color": NAVY}}, "radius": 18}],
-            "labels": [{"color": {"solid": {"color": WHITE}}, "fontSize": 34, "fontFamily": "Segoe UI Semibold"}],
-            "categoryLabels": [{"color": {"solid": {"color": SOFT}}, "fontSize": 14}],
+            "background": [{"show": True, "color": {"solid": {"color": WHITE}}, "transparency": 0}],
+            "border": [{"show": True, "color": {"solid": {"color": LINE}}, "radius": 4}],
+            "labels": [{"color": {"solid": {"color": NAVY}}, "fontSize": 30, "fontFamily": "Segoe UI Semibold"}],
+            "categoryLabels": [{"color": {"solid": {"color": MUTED}}, "fontSize": 12}],
         }},
         "tableEx": {"*": {
             "columnHeaders": [{"backColor": {"solid": {"color": WHITE}}, "fontColor": {"solid": {"color": NAVY}},
@@ -68,7 +67,7 @@ THEME = {
             "grid": [{"gridHorizontal": True, "gridHorizontalColor": {"solid": {"color": LINE}}}],
         }},
         "slicer": {"*": {
-            "border": [{"show": True, "color": {"solid": {"color": LINE}}, "radius": 14}],
+            "border": [{"show": True, "color": {"solid": {"color": LINE}}, "radius": 4}],
             "items": [{"fontColor": {"solid": {"color": NAVY}}, "textSize": 13,
                        "background": {"solid": {"color": CANVAS}}}],
             "title": [{"show": True, "fontColor": {"solid": {"color": MUTED}}, "fontSize": 11,
@@ -123,12 +122,12 @@ def month(entity, prop):
 
 
 def visual(label, vtype, x, y, w, h, order, roles=None, objects=None, title=None,
-           container=None, sort=None, filters=None, title_align=None):
+           container=None, sort=None, filters=None, title_align=None, sort_dir="Descending"):
     body = {"visualType": vtype}
     if roles:
         body["query"] = {"queryState": {role: {"projections": f} for role, f in roles.items()}}
         if sort:
-            body["query"]["sortDefinition"] = {"sort": [{"field": sort, "direction": "Descending"}],
+            body["query"]["sortDefinition"] = {"sort": [{"field": sort, "direction": sort_dir}],
                                                "isDefaultSort": False}
     if objects:
         body["objects"] = objects
@@ -183,10 +182,10 @@ def table_style(widths):
 def title_block(prefix, title, subtitle):
     return [visual(f"{prefix}-title", "textbox", 20, 12, 1300, 80, 1, objects={
         "general": [{"properties": {"paragraphs": [
-            {"textRuns": [{"value": title, "textStyle": {"fontSize": "30pt", "fontWeight": "bold", "color": NAVY}}],
-             "horizontalTextAlignment": "center"},
+            {"textRuns": [{"value": title, "textStyle": {"fontSize": "24pt", "fontWeight": "bold", "color": NAVY}}],
+             "horizontalTextAlignment": "left"},
             {"textRuns": [{"value": subtitle, "textStyle": {"fontSize": "11pt", "color": MUTED}}],
-             "horizontalTextAlignment": "center"},
+             "horizontalTextAlignment": "left"},
         ]}}]}, container={
         "background": [{"properties": {"show": lit("false")}}],
         "border": [{"properties": {"show": lit("false")}}],
@@ -258,29 +257,29 @@ page1 += [
     slicer("p1-slicer-material", "dim_product", "material_name", 1630, 270, 3, "Material"),
 ]
 page1 += kpis("p1", [
-    (S, "Avg Wait (h)", "⏱  Wait (h)", ORANGE),
-    (S, "Avg Duration (h)", "⚙  Duration (h)", None),
-    (S, "Scrap %", "♻  Scrap", None),
-    (S, "Stage Runs", "🏭  Stage runs", None),
+    (S, "Avg Wait (h)", "Avg wait before a stage (h)", ORANGE),
+    (S, "Avg Duration (h)", "Avg stage duration (h)", None),
+    (S, "Scrap %", "Scrap rate", None),
+    (S, "Stage Runs", "Stage runs", None),
 ])
 page1 += [
     visual("p1-hero-wait", "clusteredBarChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="Wait by stage (h) · bottleneck",
+           title="Where do orders wait? Average wait before each stage (h)",
            objects=measure_colored_bars(S, "Wait Color"), sort=msr_field(S, "Avg Wait (h)"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Avg Wait (h)", "Avg wait (h)")]}),
-    visual("p1-duration", "clusteredColumnChart", 1220, ROW2_Y, 680, ROW2_H, 31,
-           title="Duration by stage (h)",
+    visual("p1-duration", "clusteredBarChart", 1220, ROW2_Y, 680, ROW2_H, 31,
+           title="How long does each stage take? (h)",
            objects=solid_bars(NAVY), sort=msr_field(S, "Avg Duration (h)"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Avg Duration (h)", "Avg duration (h)")]}),
-    visual("p1-scrap", "clusteredColumnChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Scrap by stage",
-           objects=solid_bars(ORANGE), sort=msr_field(S, "Scrap %"), roles={
+    visual("p1-scrap", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
+           title="Scrap rate by stage",
+           objects=solid_bars(BLUE), sort=msr_field(S, "Scrap %"), roles={
                "Category": [column("dim_work_center", "work_center_name")],
                "Y": [measure(S, "Scrap %", "Scrap rate")]}),
     visual("p1-table-product", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Products by wait",
+           title="Products with the longest wait",
            sort=msr_field(S, "Avg Wait (h)"), roles={
                "Values": [column("dim_product", "product_name", "Product"),
                           column("dim_product", "routing_name", "Routing"),
@@ -296,30 +295,30 @@ page2 += [
     slicer("p2-slicer-status", D, "sales_order_status", 1630, 270, 3, "Status"),
 ]
 page2 += kpis("p2", [
-    (D, "On-Time %", "✅  On time", None),
-    (D, "Late Orders", "⚠  Late orders", ORANGE),
-    (D, "Avg Days Late (late orders)", "📅  Days late", None),
-    (D, "Avg Lead Time (days)", "🚚  Lead time (days)", None),
+    (D, "On-Time %", "On-time delivery", None),
+    (D, "Late Orders", "Late orders (incl. overdue)", ORANGE),
+    (D, "Avg Days Late (late orders)", "Avg days late", None),
+    (D, "Avg Lead Time (days)", "Avg lead time (days)", None),
 ])
 page2 += [
     visual("p2-hero-month", "clusteredColumnChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="On time vs late · by month",
+           title="On-time and late orders by order month",
            objects={"labels": labels_on(), "valueAxis": HIDE_VALUE_AXIS,
                     "legend": [{"properties": {"show": lit("true"), "position": lit("'Top'")}}]},
            roles={"Category": [month(D, "order_date")],
                   "Y": [measure(D, "On-Time Orders", "On time"), measure(D, "Late Orders", "Late")]}),
     visual("p2-donut", "donutChart", 1220, ROW2_Y, 680, ROW2_H, 31,
-           title="On time vs late",
+           title="Share of orders on time",
            objects={"labels": labels_on(labelStyle=lit("'Category, percent of total'")),
                     "legend": [{"properties": {"show": lit("false")}}]},
            roles={"Y": [measure(D, "On-Time Orders", "On time"), measure(D, "Late Orders", "Late")]}),
     visual("p2-top-customers", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Top 10 late customers",
+           title="Customers with the most late orders",
            objects=solid_bars(NAVY), sort=msr_field(D, "Late Orders"), filters=[top10_customers], roles={
                "Category": [column("dim_customer", "company_name")],
                "Y": [measure(D, "Late Orders", "Late orders")]}),
     visual("p2-table-late", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Late orders",
+           title="Late orders, most days late first",
            sort=col_field(D, "days_late"), filters=[only_late], roles={
                "Values": [column(D, "sales_order_number", "Order"),
                           column("dim_customer", "company_name", "Customer"),
@@ -335,16 +334,16 @@ page3 += [
     slicer("p3-slicer-customer", "dim_customer", "company_name", 1630, 270, 3, "Customer"),
 ]
 page3 += kpis("p3", [
-    (M, "Margin %", "💰  Margin", ORANGE),
-    (M, "Revenue (BRL)", "🧾  Revenue (BRL)", None),
-    (M, "Material Cost (BRL)", "🔩  Material (BRL)", None),
-    (M, "Freight Cost (BRL)", "🚚  Freight (BRL)", None),
+    (M, "Margin %", "Contribution margin", ORANGE),
+    (M, "Revenue (BRL)", "Revenue (BRL)", None),
+    (M, "Material Cost (BRL)", "Material cost (BRL)", None),
+    (M, "Freight Cost (BRL)", "Freight cost (BRL)", None),
 ])
 page3 += [
     visual("p3-hero-month", "clusteredColumnChart", 20, ROW2_Y, 1180, ROW2_H, 30,
-           title="Margin by month · shipped orders",
-           objects=solid_bars(NAVY),
-           roles={"Category": [month(M, "order_date")],
+           title="Contribution margin by order month",
+           objects=solid_bars(NAVY), sort=col_field(M, "order_month"), sort_dir="Ascending",
+           roles={"Category": [column(M, "order_month", "Month")],
                   "Y": [measure(M, "Margin %", "Margin")]}),
     visual("p3-donut", "donutChart", 1220, ROW2_Y, 680, ROW2_H, 31,
            title="Where the revenue goes",
@@ -355,12 +354,12 @@ page3 += [
                         measure(M, "Freight Cost (BRL)", "Freight"),
                         measure(M, "Margin (BRL)", "Margin")]}),
     visual("p3-state", "clusteredBarChart", 20, ROW3_Y, 760, ROW3_H, 32,
-           title="Freight share of revenue by state",
-           objects=solid_bars(ORANGE), sort=msr_field(M, "Freight % of Revenue"), roles={
+           title="Freight as a share of revenue, by customer state",
+           objects=solid_bars(BLUE), sort=msr_field(M, "Freight % of Revenue"), roles={
                "Category": [column("dim_customer", "state")],
                "Y": [measure(M, "Freight % of Revenue", "Freight / revenue")]}),
     visual("p3-table-orders", "tableEx", 800, ROW3_Y, 1100, ROW3_H, 33,
-           title="Orders by revenue",
+           title="Largest orders: revenue and margin",
            sort=msr_field(M, "Revenue (BRL)"), roles={
                "Values": [column(M, "sales_order_number", "Order"),
                           column("dim_customer", "company_name", "Customer"),

@@ -9,7 +9,8 @@
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-BRONZE_PATH = "Files/erp"
+# Full path of the shortcut Files/erp_v2 (the relative path was not found on a new shortcut).
+BRONZE_PATH = [f.path for f in mssparkutils.fs.ls("Files") if f.name == "erp_v2"][0]
 
 # table -> (primary key, columns that define "latest version", newest first)
 TABLES = {
