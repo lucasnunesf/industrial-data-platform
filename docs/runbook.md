@@ -10,7 +10,7 @@ Routine tasks and known failure modes of the pipeline.
 2. **Upload to the lake** (requires `az login` on the Azure subscription and `pip install -r ingestion/requirements-upload.txt`): `python ingestion/upload.py --account <storage account>`.
 3. **Silver (Fabric):** the Lakehouse reads `bronze/erp_v2` through a OneLake shortcut under `Files` ([ADR-004](decisions.md)). Paste the code of `processing/silver/` into two notebooks, attach the Lakehouse as the default one and run `01_build_silver`, then `02_test_silver` (it must end with 0 failed).
 4. **Gold (dbt)** (requires `pip install dbt-fabric` on Python 3.12 and `az login --allow-no-subscriptions` with the Fabric account): set `FABRIC_SQL_HOST` to the Warehouse SQL endpoint and run `dbt build --project-dir dbt --profiles-dir dbt`.
-5. **Power BI:** refresh the semantic model and publish. `python powerbi/build_report.py "<name>.Report"` regenerates the pages; close Power BI Desktop first.
+5. **Power BI:** refresh the semantic model and publish.
 
 **Airflow (optional).** The same steps as a DAG. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST`, run `docker compose -f orchestration/airflow/docker-compose.yml up -d --build` (the image is about 5 GB), log in once per tenant inside the container, then trigger `industrial_pipeline` at http://localhost:8080:
 

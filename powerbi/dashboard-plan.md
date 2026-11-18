@@ -2,17 +2,6 @@
 
 Source: the six tables of the `gold` schema in the Fabric Warehouse `wh_industrial`, loaded in Import mode through the SQL Server connector (sign in with an organizational account). The measures are in [measures.dax](measures.dax).
 
-## How the report is built
-
-- **In Power BI Desktop:** connection to the Fabric Warehouse, the relationships below and the DAX measures (kept in [measures.dax](measures.dax)).
-- **As code:** the report is saved as a Power BI Project (`.pbip`, PBIR format) and [build_report.py](build_report.py) writes the page layout, every visual and the theme.
-
-Why a script for the layout: PBIR stores each visual as a JSON file, so a change to a chart is a readable diff in Git, and after a change to the model the three pages are rebuilt the same way in one command instead of being fixed by hand. Any page can still be edited in Desktop; the script is the reproducible starting point.
-
-```bash
-python powerbi/build_report.py "<path>/<name>.Report"
-```
-
 ## Design
 
 - Each page answers one question with four KPI cards, three charts and one table.

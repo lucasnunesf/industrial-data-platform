@@ -112,7 +112,7 @@ The gold layer is a star schema with three facts at different grains, sharing th
 | Processing (silver) | Microsoft Fabric notebooks (PySpark, Delta Lake) | ✅ |
 | Transformation & tests (gold) | dbt (`dbt-fabric`) on Fabric Warehouse | ✅ |
 | Infrastructure as code | Terraform (data lake, Key Vault) | ✅ |
-| Visualization | Power BI: model and DAX measures in Desktop, page layout versioned as PBIR | ✅ |
+| Visualization | Power BI (Import from the Fabric Warehouse, star schema, DAX) | ✅ |
 | Orchestration | PowerShell script (end to end) and an Apache Airflow 3 DAG (local, Docker) | ✅ |
 | CI | GitHub Actions (pytest, ruff, Terraform validate, dbt parse) | ✅ |
 
@@ -162,7 +162,7 @@ The cloud steps (upload to the lake, silver in Fabric, dbt, Airflow) need an Azu
 1. **ERP and plant simulator:** PostgreSQL schema and a Python simulator for orders, production and shipping.
 2. **Batch lakehouse:** incremental extraction to Parquet, ADLS Gen2 bronze with Terraform, silver in Microsoft Fabric with 88 data quality checks.
 3. **Gold layer:** dbt star schema for bottlenecks, on-time delivery and margin, with 34 tests.
-4. **Power BI:** semantic model built in Power BI Desktop (Import from the Fabric Warehouse, star schema relationships, DAX measures in `measures.dax`). The page layout is saved as a Power BI Project (PBIR) and written by `build_report.py`, so every visual change shows up as a readable diff in Git and the three pages can be rebuilt identically after a model change.
+4. **Power BI:** three-page report on the gold layer, with the star schema relationships and the DAX measures in `measures.dax`.
 5. **Finance and logistics:** material cost with the real USD/BRL rate, machine time and freight per order.
 6. **Automation:** CI on GitHub Actions and a local Airflow DAG.
 
