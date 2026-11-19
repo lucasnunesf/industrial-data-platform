@@ -1,71 +1,77 @@
 # Runbook
 
-Routine tasks and known failure modes of the pipeline.
+How to run the pipeline, and what to do when a step fails.
 
 ## Run the full pipeline
 
-`orchestration/run_pipeline.ps1` chains the steps below and pauses for the manual silver run in Fabric.
+`orchestration/run_pipeline.ps1` runs these steps in order and pauses for the silver step in Fabric.
 
-1. **Source and bronze:** the local steps of the README quick start.
-2. **Upload to the lake** (requires `az login` on the Azure subscription and `pip install -r ingestion/requirements-upload.txt`): `python ingestion/upload.py --account <storage account>`.
-3. **Silver (Fabric):** the Lakehouse reads `bronze/erp_v2` through a OneLake shortcut under `Files` ([ADR-004](decisions.md)). Paste the code of `processing/silver/` into two notebooks, attach the Lakehouse as the default one and run `01_build_silver`, then `02_test_silver` (it must end with 0 failed).
-4. **Gold (dbt)** (requires `pip install dbt-fabric` on Python 3.12 and `az login --allow-no-subscriptions` with the Fabric account): set `FABRIC_SQL_HOST` to the Warehouse SQL endpoint and run `dbt build --project-dir dbt --profiles-dir dbt`.
+1. **Source and bronze:** the local steps in the README.
+2. **Upload to the lake:** sign in with `az login`, install `ingestion/requirements-upload.txt`, then run `python ingestion/upload.py --account <storage account>`.
+3. **Silver:** in the Fabric Lakehouse, the shortcut `Files/erp_v2` points to `bronze/erp_v2`. Paste the two files of `processing/silver/` into two notebooks, set the Lakehouse as the default one, and run `01_build_silver`, then `02_test_silver`. The second one must end with `0 failed`.
+4. **Gold:** install `dbt-fabric` (Python 3.12), sign in with `az login --allow-no-subscriptions` on the Fabric account, set `FABRIC_SQL_HOST` to the Warehouse SQL endpoint, and run `dbt build --project-dir dbt --profiles-dir dbt`.
 5. **Power BI:** refresh the semantic model and publish.
 
-**Airflow (optional).** The same steps as a DAG. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST`, run `docker compose -f orchestration/airflow/docker-compose.yml up -d --build` (the image is about 5 GB), log in once per tenant inside the container, then trigger `industrial_pipeline` at http://localhost:8080:
+## Create the data lake (Terraform)
 
-```powershell
+Copy `infra/terraform.tfvars.example` to `infra/terraform.tfvars` and set your subscription ID. Then:
+
+```bash
+terraform -chdir=infra init
+terraform -chdir=infra apply
+```
+
+This creates the resource group, the storage account with the `bronze`, `silver` and `gold` containers, and a Key Vault.
+
+## Run with Airflow (optional)
+
+The DAG `industrial_pipeline` runs the same steps. Set `AZURE_STORAGE_ACCOUNT` and `FABRIC_SQL_HOST`, then start it (the image is about 5 GB):
+
+```bash
+docker compose -f orchestration/airflow/docker-compose.yml up -d --build
+```
+
+Sign in once per account inside the container:
+
+```bash
 docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/lake airflow az login --use-device-code
 docker compose -f orchestration/airflow/docker-compose.yml exec -e AZURE_CONFIG_DIR=/opt/airflow/azure/fabric airflow az login --use-device-code --allow-no-subscriptions
 ```
 
-The DAG stops at `wait_for_silver` until the notebooks have run and the task is approved in the UI ([ADR-008](decisions.md)).
+Open http://localhost:8080 and trigger the DAG. It stops at `wait_for_silver`: run the notebooks in Fabric, then approve the task.
 
-## Renew the SAS token of the OneLake shortcut
+## Renew the SAS token
 
-The shortcut `Files/erp_v2` in the Fabric Lakehouse reads `bronze/erp_v2` with a read-only SAS token ([ADR-004](decisions.md)). When it expires, reads from the shortcut fail with an authorization error and the silver notebooks stop working.
+The shortcut reads the lake with a read-only token. When it expires, the silver notebooks fail with an authorization error.
 
 1. In the Azure portal, open the storage account and go to **Shared access signature**.
-2. Allowed services: Blob. Allowed resource types: Service, Container and Object. Permissions: Read and List.
-3. Start time one day in the past, a new expiry date, then generate the token.
-4. In Fabric, open **Manage connections and gateways**, edit the connection used by the shortcut and paste the new token without the leading `?`.
+2. Services: Blob. Resource types: Service, Container and Object. Permissions: Read and List.
+3. Set the start one day in the past and a new expiry date, then generate the token.
+4. In Fabric, open **Manage connections and gateways**, edit the connection of the shortcut and paste the token without the leading `?`.
 
-The token is kept only in the Fabric connection, never in the repository.
+The token is stored only in the Fabric connection, never in the repository.
 
-## Rebuild everything after an ERP schema change
+## Rebuild after an ERP schema change
 
-`CREATE TABLE IF NOT EXISTS` does not alter an existing table, so a schema change needs a new ERP database and a new bronze folder ([ADR-011](decisions.md)).
+`CREATE TABLE IF NOT EXISTS` does not change an existing table, so a schema change needs a new database and a new bronze folder.
 
-1. Bump `SOURCE_FOLDER` in `ingestion/config.py` and `BRONZE_PATH` in both silver notebooks.
+1. Change `SOURCE_FOLDER` in `ingestion/config.py` and the folder name in both silver notebooks.
 2. Move the local `ingestion/out/bronze` folder away: it holds the old files and the old watermarks.
-3. `docker compose down -v`, then `docker compose up -d --wait erp-db`.
-4. Run the simulator and the extractor, then `python ingestion/upload.py`.
-5. In the Lakehouse, create a shortcut under `Files` to the new folder of the `bronze` container, reusing the existing connection.
-6. Paste the new notebook code in Fabric, run `01_build_silver` and `02_test_silver`, then `dbt build`.
-7. Refresh the Power BI model and publish.
+3. Run `docker compose down -v`, then `docker compose up -d --wait erp-db`.
+4. Run the simulator, the extractor and the upload.
+5. In the Lakehouse, create a shortcut under `Files` to the new folder, reusing the existing connection.
+6. Run both notebooks, then `dbt build`, then refresh Power BI.
 
-## Notebook fails with `400 Bad Request` on `Files/...`
+## Common errors
 
-The notebook has no default Lakehouse. Attach the Lakehouse (the item with the house icon, not the SQL analytics endpoint) as the default and restart the session.
+| Error | Fix |
+|---|---|
+| Notebook: `400 Bad Request` on `Files/...` | Set the Lakehouse (house icon) as the default one and restart the session. |
+| Notebook: `PATH_NOT_FOUND` on a new shortcut | Check that the shortcut is under **Files**, not **Tables**, and restart the session. |
+| Notebook: `TooManyRequestsForCapacity` | Stop the Spark sessions of other notebooks, wait a minute and run again. |
+| dbt cannot connect | Check `FABRIC_SQL_HOST`, check `az account show`, then run `dbt debug --project-dir dbt --profiles-dir dbt`. |
+| dbt: `deadlocked on lock resources` | Keep `threads: 1` in `dbt/profiles.yml`. |
 
-## Notebook fails with `PATH_NOT_FOUND` on a new shortcut
+## Fabric trial
 
-Check that the shortcut was created under **Files**, not under **Tables**: under Tables, Fabric tries to read the folders as tables and shows them as *Unidentified*. The notebooks read the shortcut by its full path, taken from `mssparkutils.fs.ls("Files")`; with the short relative path, a shortcut created while a session was open was not found.
-
-## Notebook fails with `TooManyRequestsForCapacity`
-
-The trial capacity allows few concurrent Spark sessions. Stop the sessions of other notebooks (or cancel running items in the Monitor hub), wait a minute and run again.
-
-## dbt cannot connect to the Warehouse
-
-- Check that `FABRIC_SQL_HOST` is set in the current terminal.
-- Check that the Azure CLI session belongs to the account that owns the Fabric workspace (`az account show`). If it differs from the Azure account of the lake, use a separate folder with `AZURE_CONFIG_DIR`.
-- Run `dbt debug --project-dir dbt --profiles-dir dbt` to see the failing step.
-
-## dbt fails with `deadlocked on lock resources`
-
-The Warehouse can deadlock when several views are created at the same time. The profile uses one thread (`threads: 1` in `dbt/profiles.yml`); a full build takes under a minute.
-
-## Microsoft Fabric trial
-
-The trial capacity is limited to 60 days. Content is deleted when it ends, so keep the dashboard file and screenshots outside Fabric.
+The trial lasts 60 days and its content is deleted when it ends. Keep the report file and the screenshots outside Fabric.
